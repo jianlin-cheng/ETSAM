@@ -1,0 +1,142 @@
+dataset_id,run_id,annotation_ids,split,organism_name
+10444,16674,32927,train,Homo sapiens
+10444,16699,32952,train,Homo sapiens
+10444,16701,32954,train,Homo sapiens
+10443,16499,32198,train,Sprague Dawley Rat
+10443,16516,32215,train,Sprague Dawley Rat
+10443,16564,32263,train,Sprague Dawley Rat
+10442,16202,31444,train,Mycoplasma mycoides subsp. capri str. GM12
+10442,16225,31490,train,Mycoplasma mycoides subsp. capri str. GM12
+10442,16227,31494,train,Mycoplasma mycoides subsp. capri str. GM12
+10302,14113,28754,train,Chlamydomonas reinhardtii
+10302,14115,28756,train,Chlamydomonas reinhardtii
+10302,14116,28757,train,Chlamydomonas reinhardtii
+10302,14119,28760,train,Chlamydomonas reinhardtii
+10302,14122,28763,train,Chlamydomonas reinhardtii
+10302,14128,28769,train,Chlamydomonas reinhardtii
+10302,14152,28793,train,Chlamydomonas reinhardtii
+10301,14069,28736,train,Chlamydomonas reinhardtii
+10301,14070,28737,train,Chlamydomonas reinhardtii
+10301,14072,28739,train,Chlamydomonas reinhardtii
+10301,14075,28742,train,Chlamydomonas reinhardtii
+10301,14084,28751,train,Chlamydomonas reinhardtii
+10006,466,2519,train,Severe acute respiratory syndrome coronavirus 2
+10006,467,2520,train,Severe acute respiratory syndrome coronavirus 2
+10006,476,2529,train,Severe acute respiratory syndrome coronavirus 2
+10006,519,2572,train,Severe acute respiratory syndrome coronavirus 2
+10202,9607,26066,train,Campylobacter jejuni
+10202,9615,26074,train,Campylobacter jejuni
+10202,9621,26080,train,Campylobacter jejuni
+10202,9622,26081|12765,train,Campylobacter jejuni
+10158,8310,24823,train,Bdellovibrio bacteriovorus
+10158,8318,24831,train,Bdellovibrio bacteriovorus
+10158,8325,24838,train,Bdellovibrio bacteriovorus
+10158,8332,24845,train,Bdellovibrio bacteriovorus
+10155,7978,11141,train,Bdellovibrio bacteriovorus
+10155,7980,11143|24495,train,Bdellovibrio bacteriovorus
+10155,7981,11144,train,Bdellovibrio bacteriovorus
+10155,7995,11158|24510,train,Bdellovibrio bacteriovorus
+10173,8628,11782|25137,train,Homo sapiens
+10168,8547,11704|25057,train,Caulobacter crescentus
+10168,8562,11718|25072,train,Caulobacter crescentus
+10056,3592,5484|18748,train,Coxiella burnetii
+10056,3598,5490|18754,train,Coxiella burnetii
+10056,3600,5492|18756,train,Coxiella burnetii
+10056,3605,5497|18761,train,Coxiella burnetii
+10288,13392,14773|28267,train,Homo sapiens
+10288,13367,14759|28253,train,Homo sapiens
+10054,3452,5344|18608,train,Coxiella burnetii
+10054,3444,5336|18600,train,Coxiella burnetii
+10054,3443,5335|18599,train,Coxiella burnetii
+10054,3467,5359|18623,train,Coxiella burnetii
+10009,3143,2936|16255,train,Chlamydomonas reinhardtii
+10009,3151,2944|16263,train,Chlamydomonas reinhardtii
+10009,3146,2939|16258,train,Chlamydomonas reinhardtii
+10108,7420,22990,train,Rattus norvegicus
+10108,7419,22989,train,Rattus norvegicus
+10108,7416,22986,train,Rattus norvegicus
+10108,7415,22985,train,Rattus norvegicus
+10170,8591,25101,train,Homo sapiens
+10170,8584,25094,train,Homo sapiens
+10170,8588,25098,train,Homo sapiens
+10170,8600,25110,train,Homo sapiens
+10015,10986,3181,train,Dolichospermum flos-aquae
+10015,10980,3175,train,Dolichospermum flos-aquae
+10015,10999,3194,train,Dolichospermum flos-aquae
+10016,1423,3278,train,Dolichospermum flos-aquae
+10192,9363,12514,train,Escherichia coli
+10192,9359,12510,train,Escherichia coli
+10192,9360,12511,train,Escherichia coli
+10159,8339,11499|24852,train,Helicobacter pylori
+10287,13344,14739,train,Helicobacter hepaticus
+10287,13345,14740,train,Helicobacter hepaticus
+10287,13352,14747|28241,train,Helicobacter hepaticus
+10021,1361,31136,train,Halothiobacillus neapolitanus
+10021,1363,31138,train,Halothiobacillus neapolitanus
+10021,1369,31144,train,Halothiobacillus neapolitanus
+10021,1377,31152,train,Halothiobacillus neapolitanus
+10138,12212,23531,train,Helicobacter pylori
+10138,12214,10182|23533,train,Helicobacter pylori
+10138,12213,10181|23532,train,Helicobacter pylori
+10151,7755,10920|24272,train,Helicobacter pylori
+10151,7765,10930|24282,train,Helicobacter pylori
+10151,7760,10925|24277,train,Helicobacter pylori
+10151,7758,10923|24275,train,Helicobacter pylori
+polnet_data_2,polnet_data_2_generation_17,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_06,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_08,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_14,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_11,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_01,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_02,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_12,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_13,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_05,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_07,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_09,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_04,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_16,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_03,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_10,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_00,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_2,polnet_data_2_generation_15,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_7,polnet_data_7_generation_4,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_7,polnet_data_7_generation_1,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_7,polnet_data_7_generation_0,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_7,polnet_data_7_generation_3,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_7,polnet_data_7_generation_2,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_8,polnet_data_8_generation_4,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_8,polnet_data_8_generation_1,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_8,polnet_data_8_generation_0,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_8,polnet_data_8_generation_3,simulated_annotation,train,polnet_simulated_tomogram
+polnet_data_8,polnet_data_8_generation_2,simulated_annotation,train,polnet_simulated_tomogram
+10000,245,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10000,246,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10000,247,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10001,251,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10001,254,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10001,258,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
+10010,11972,all_membrane_annotations,test,Mus musculus
+10010,11988,all_membrane_annotations,test,Mus musculus
+10010,12000,all_membrane_annotations,test,Mus musculus
+10436,15943,all_membrane_annotations,test,Encephalitozoon intestinalis
+10437,16039,all_membrane_annotations,test,Encephalitozoon intestinalis
+10437,16114,all_membrane_annotations,test,Encephalitozoon intestinalis
+10438,15936,all_membrane_annotations,test,Encephalitozoon hellem
+10438,15937,all_membrane_annotations,test,Encephalitozoon hellem
+10438,15939,all_membrane_annotations,test,Encephalitozoon hellem
+polnet_data_3,polnet_data_3_generation_4,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_3,polnet_data_3_generation_1,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_3,polnet_data_3_generation_0,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_3,polnet_data_3_generation_3,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_3,polnet_data_3_generation_2,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_4,polnet_data_4_generation_4,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_4,polnet_data_4_generation_1,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_4,polnet_data_4_generation_0,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_4,polnet_data_4_generation_3,simulated_annotation,test,polnet_simulated_tomogram
+polnet_data_4,polnet_data_4_generation_2,simulated_annotation,test,polnet_simulated_tomogram
+10032,676,not_needed,robustness,Gluconacetobacter hansenii
+10160,8354,not_needed,robustness,Hylemonella gracilis
+10104,7325,not_needed,robustness,MLV
+10118,7667,not_needed,robustness,Magnetospirillum magneticum
+10116,7639,not_needed,robustness,Nitrosopumilus maritimus
