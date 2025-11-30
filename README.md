@@ -27,20 +27,90 @@ conda activate etsam
 ```
 
 # Usage
-## Run ETSAM on a sample cryo-ET tomogram
-#### Raw ETSAM membrane prediction without any post-processing:
+## Run ETSAM on a sample cryo-ET tomogram:
 ```
-python etsam.py <input_tomogram> --output_dir <output directory to store the predictions>
+python etsam.py <input_tomogram> --output-dir <output directory to store the predictions>
 ```
 Stores the ETSAM predicted membranes as binary masks in the output directory.
 
-#### Post-processed ETSAM membrane prediction:
+**Example:**
+
+Download the experimental tomogram of prokaryotic cell of Hylemonella gracilis (CDP Dataset: 10160, Run: 8354):
+```
+wget -P data/ https://files.cryoetdataportal.cziscience.com/10160/ycw2013-01-03-15/Reconstructions/VoxelSpacing16.145/Tomograms/100/ycw2013-01-03-15.mrc
+```
+Run ETSAM on the experimental tomogram to segment the membranes and store the predicted output in the `results/cdp_run_8354/` directory:
+```
+user@host$ python etsam.py data/ycw2013-01-03-15.mrc --output-dir results/cdp_run_8354/
+==> Reading input tomogram: /run/media/joel/My_Passport/ETSAM/data/ycw2013-01-03-15.mrc
+Input tomogram shape: (500, 924, 956), voxel size: (16.145, 16.145, 16.145)
+==> Running Stage 1 Prediction with Prompt Method: grid_zero
+==> Loading ETSAM with checkpoint:  checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 500/500 [00:25<00:00, 19.83it/s]
+==> Running Stage 2 Prediction with Prompt Method: etsam_stage1_partial
+==> Loading ETSAM with checkpoint:  checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using ETSAM stage 1 predicted mask at every 50th slice as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 500/500 [00:31<00:00, 15.66it/s]
+==> Saving predicted mask
+-------------------------------------------------------------------------------------------------
+```
+Visualizing the tomogram and predicted output stored `results/cdp_run_8354/ycw2013-01-03-15_etsam_predicted_mask.mrc`:
+
+![Example-1](<assets/github-example-1.png>)
+
+## Run ETSAM membrane prediction with post-processing:
 ```
 python etsam.py <input_tomogram> \
     --post-process \
-    --output_dir <output directory to store the predictions>
+    --output-dir <output directory to store the predictions>
 ```
 Stores both the unprocessed and post-processed binary masks in the output directory.
+
+**Example:**
+
+Download the experimental tomogram of vegetative cell of Schizosaccharomyces pombe 972h- (CDP Dataset: 10000 - Run 247):
+```
+wget -P data/ https://files.cryoetdataportal.cziscience.com/10000/TS_037/Reconstructions/VoxelSpacing13.480/Tomograms/100/TS_037.mrc
+```
+Run ETSAM on the experimental tomogram to segment the membranes, post-process the predictions and store both the unprocessed and post-processed output in the `results/cdp_run_247/` directory:
+```
+user@host$ python etsam.py data/TS_037.mrc --post-process --output-dir results/cdp_run_247/
+==> Reading input tomogram: /run/media/joel/My_Passport/ETSAM/data/TS_037.mrc
+Input tomogram shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
+==> Running Stage 1 Prediction with Prompt Method: grid_zero
+==> Loading ETSAM with checkpoint:  checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 500/500 [00:24<00:00, 20.19it/s]
+==> Running Stage 2 Prediction with Prompt Method: etsam_stage1_partial
+==> Loading ETSAM with checkpoint:  checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using ETSAM stage 1 predicted mask at every 50th slice as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 500/500 [00:31<00:00, 15.70it/s]
+==> Saving predicted mask
+==> Post-processing the predicted mask
+==> Saving post-processed mask
+-------------------------------------------------------------------------------------------------
+```
+
+Visualizing the tomogram, unprocessed (`TS_037_etsam_predicted_mask.mrc`) and post-processed (`TS_037_etsam_predicted_post_processed_mask.mrc`) predicted segmentation stored in `results/cdp_run_247/`:
+
+![Example-1](<assets/github-example-2.png>)
 
 ## Advanced Options
 ### Custom logit threshold for mask
@@ -49,7 +119,7 @@ For each pixel in a given tomogram slice, a logit value is predicted by the fina
 ```
 python etsam.py <input_tomogram> \
     --logit-threshold -0.25 \
-    --output_dir <output directory to store the predictions> 
+    --output-dir <output directory to store the predictions> 
 ```
 
 ### Store the predicted logit (likelihood) scores
@@ -58,7 +128,7 @@ We also provide the users with option to store the ETSAM predicted logit (likeli
 ```
 python etsam.py <input_tomogram> \
     --store-logits \
-    --output_dir <output directory to store the predictions> 
+    --output-dir <output directory to store the predictions> 
 ```
 
 ### Adjust the Post-process Parameter
@@ -67,7 +137,7 @@ We developed a post-processing technique that can significantly reduce the visua
 python etsam.py <input_tomogram> \
     --post-process \
     --post-process-min-slices 5 \
-    --output_dir <output directory to store the predictions> 
+    --output-dir <output directory to store the predictions> 
 ```
 
 Reducing the number of slices will remove only smaller noise blobs and increasing it will remove larger noise blobs. 
