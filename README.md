@@ -1,4 +1,7 @@
 # ETSAM: Effectively Segmenting Membranes in cryo-Electron Tomograms
+
+[![DOI:10.1101/2025.11.23.689996](http://img.shields.io/badge/DOI-10.1101/2025.11.23.689996-B31B1B.svg)](https://doi.org/10.1101/2025.11.23.689996)
+
 Cryogenic Electron Tomography (cryo-ET) is a core experimental technique used to visualizethe cell structures and macromolecules in their native cellular environment. Accuratesegmentation of cell structures, such as cell membranes, is crucial for advancing ourunderstanding of cellular organization and function. However, several inherent limitations incryo-ET, including the very low signal-to-noise ratio of reconstructed 3D tomograms, missingwedge artifacts from limited tilt angles, and other noise artifacts, collectively hinder the reliableidentification and delineation of these structures. In this study, we introduce ETSAM - a two-stage, SAM2-based fine-tuned model that effectively segments cell membranes in cryo-ETtomograms. It is trained on a diverse dataset comprising 83 experimental tomograms fromthe CryoET Data Portal (CDP) database and 28 simulated tomograms generated using thePolNet tool. ETSAM achieves state-of-the-art performance compared to other deep learningmethods when evaluated on an independent test set comprising 10 simulated tomogramsand 15 experimental tomograms from the CDP database, for which ground-truth annotationsare available. ETSAM robustly segments cell membranes with high sensitivity to membraneregions with less noise in the predictions, thereby achieving a better precision-recall trade-offthan other deep learning methods.
 
 # ETSAM Pipeline 
@@ -159,4 +162,18 @@ python scripts/evaluate_etsam.py \
     --results etsam_testset_results.csv \
     --csv data/testset.csv \
     --collection-dir data/collection
+```
+
+# Cite
+```
+@article {Selvaraj2025.11.23.689996,
+	author = {Selvaraj, Joel and Cheng, Jianlin},
+	title = {ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms},
+	elocation-id = {2025.11.23.689996},
+	year = {2025},
+	doi = {10.1101/2025.11.23.689996},
+	publisher = {Cold Spring Harbor Laboratory},
+	eprint = {https://www.biorxiv.org/content/early/2025/11/26/2025.11.23.689996.full.pdf},
+	journal = {bioRxiv}
+}
 ```
