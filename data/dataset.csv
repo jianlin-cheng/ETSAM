@@ -110,21 +110,16 @@ polnet_data_8,polnet_data_8_generation_1,simulated_annotation,train,polnet_simul
 polnet_data_8,polnet_data_8_generation_0,simulated_annotation,train,polnet_simulated_tomogram
 polnet_data_8,polnet_data_8_generation_3,simulated_annotation,train,polnet_simulated_tomogram
 polnet_data_8,polnet_data_8_generation_2,simulated_annotation,train,polnet_simulated_tomogram
-10000,245,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10000,246,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10000,247,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10001,251,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10001,254,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10001,258,all_membrane_annotations,test,Schizosaccharomyces pombe 972h-
-10010,11972,all_membrane_annotations,test,Mus musculus
-10010,11988,all_membrane_annotations,test,Mus musculus
-10010,12000,all_membrane_annotations,test,Mus musculus
-10436,15943,all_membrane_annotations,test,Encephalitozoon intestinalis
-10437,16039,all_membrane_annotations,test,Encephalitozoon intestinalis
-10437,16114,all_membrane_annotations,test,Encephalitozoon intestinalis
-10438,15936,all_membrane_annotations,test,Encephalitozoon hellem
-10438,15937,all_membrane_annotations,test,Encephalitozoon hellem
-10438,15939,all_membrane_annotations,test,Encephalitozoon hellem
+10000,245,none,test,Schizosaccharomyces pombe 972h-
+10000,247,none,test,Schizosaccharomyces pombe 972h-
+10001,258,none,test,Schizosaccharomyces pombe 972h-
+10010,11972,none,test,Mus musculus
+10010,12000,none,test,Mus musculus
+10438,15936,none,test,Encephalitozoon hellem
+10436,15943,none,test,Encephalitozoon intestinalis
+10104,7325,none,test,Murine Leukemia Virus
+10118,7667,none,test,Magnetospirillum magneticum
+10032,676,none,test,Gluconacetobacter hansenii
 polnet_data_3,polnet_data_3_generation_4,simulated_annotation,test,polnet_simulated_tomogram
 polnet_data_3,polnet_data_3_generation_1,simulated_annotation,test,polnet_simulated_tomogram
 polnet_data_3,polnet_data_3_generation_0,simulated_annotation,test,polnet_simulated_tomogram
@@ -135,8 +130,8 @@ polnet_data_4,polnet_data_4_generation_1,simulated_annotation,test,polnet_simula
 polnet_data_4,polnet_data_4_generation_0,simulated_annotation,test,polnet_simulated_tomogram
 polnet_data_4,polnet_data_4_generation_3,simulated_annotation,test,polnet_simulated_tomogram
 polnet_data_4,polnet_data_4_generation_2,simulated_annotation,test,polnet_simulated_tomogram
-10032,676,not_needed,robustness,Gluconacetobacter hansenii
-10160,8354,not_needed,robustness,Hylemonella gracilis
-10104,7325,not_needed,robustness,MLV
-10118,7667,not_needed,robustness,Magnetospirillum magneticum
-10116,7639,not_needed,robustness,Nitrosopumilus maritimus
+10160,8354,none,robustness,Hylemonella gracilis
+10039,800,none,robustness,Pseudomonas aeruginosa
+10116,7639,none,robustness,Nitrosopumilus maritimus
+10230,10363,none,robustness,Salmonella typhimurium
+10115,7591,none,robustness,Sulfolobus acidocaldarius

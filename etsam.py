@@ -86,7 +86,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("eval.py")
     parser.add_argument("input_tomogram_file_path", help="input tomogram file path", type=str)
     parser.add_argument("--output-dir", help="Output directory", type=str, default="./")
-    parser.add_argument("--logit-threshold", help="threshold for converting preditcted logits (likelihood scores) to binary mask", type=float, default=-0.5)
+    parser.add_argument("--logit-threshold", help="threshold for converting preditcted logits (likelihood scores) to binary mask", type=float, default=-0.25)
     parser.add_argument("--store-logits", help="store predicted logits (likelihood scores) in separate file along with binary mask", action="store_true")
     parser.add_argument("--post-process", help="post process the predicted binary mask and store it in a separate file", action="store_true")
     parser.add_argument("--post-process-min-slices", help="minimum number of Z slices a blob (connected component) must span to be kept", type=int, default=10)
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     stage2_ckpt_path = "checkpoints/etsam_stage2_v1.pt"
     config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
     stage1_prompt = "grid_zero" # "zero", "grid"
-    stage2_prompt = "etsam_stage1_partial" # "zero", "grid" or "etsam_stage1_partial"
+    stage2_prompt = "zero" # "zero", "grid" or "etsam_stage1_partial"
     store_logits = args.store_logits
     stage1_logit_threshold = 0.0
     stage2_logit_threshold = args.logit_threshold
@@ -122,34 +122,33 @@ if __name__ == "__main__":
         
         # STAGE 1 Prediction
         print(f"==> Running Stage 1 Prediction with Prompt Method: {stage1_prompt}")
-        per_obj_output_mask_full = inference.etsam_inference(tomogram_data, config_path=config, ckpt_path=stage1_ckpt_path, prompt_method=stage1_prompt)
-        etsam_stage1_seg_logits = per_obj_output_mask_full[MEMBRANE_OBJECT_ID]
-        etsam_stage1_seg_mask = (etsam_stage1_seg_logits > stage1_logit_threshold).astype(np.uint8)
+        logits = inference.etsam_inference(tomogram_data, config_path=config, ckpt_path=stage1_ckpt_path, prompt_method=stage1_prompt)[MEMBRANE_OBJECT_ID]
+        # mask = (logits > stage1_logit_threshold).astype(np.uint8)
+        mask = None
 
         # Normalize stage 1 logits and add to tomogram data
-        etsam_stage1_seg_logits[etsam_stage1_seg_logits < -5] = -5
-        etsam_stage1_seg_logits[etsam_stage1_seg_logits > 5] = 5
-        etsam_stage1_seg_logits = min_max_normalize(etsam_stage1_seg_logits)
-        combined_input_data = tomogram_data + etsam_stage1_seg_logits
+        logits[logits < -5] = -5
+        logits[logits > 5] = 5
+        logits = min_max_normalize(logits)
+        combined_input_data = tomogram_data + logits
         
         # STAGE 2 Prediction
         print(f"==> Running Stage 2 Prediction with Prompt Method: {stage2_prompt}")
-        per_obj_output_mask_full = inference.etsam_inference(combined_input_data, etsam_stage1_seg_mask, config_path=config, ckpt_path=stage2_ckpt_path, prompt_method=stage2_prompt)
-        etsam_stage2_seg_logits = per_obj_output_mask_full[MEMBRANE_OBJECT_ID]
-        etsam_stage2_seg_mask = (etsam_stage2_seg_logits > stage2_logit_threshold).astype(np.uint8)
+        logits = inference.etsam_inference(combined_input_data, mask, config_path=config, ckpt_path=stage2_ckpt_path, prompt_method=stage2_prompt)[MEMBRANE_OBJECT_ID]
+        mask = (logits > stage2_logit_threshold).astype(np.uint8)
 
         print("==> Saving predicted mask")
         os.makedirs(output_dir, exist_ok=True)
-        save_mask(etsam_stage2_seg_mask, voxel_size, output_mask_file_path)
+        save_mask(mask, voxel_size, output_mask_file_path)
         
         if store_logits:
             print("==> Saving segmentation logits")
             os.makedirs(os.path.dirname(output_logits_file_path), exist_ok=True)
-            save_logits(etsam_stage2_seg_logits, voxel_size, output_logits_file_path)
+            save_logits(logits, voxel_size, output_logits_file_path)
         
         if post_process:
             print("==> Post-processing the predicted mask")
-            post_processed_mask = identify_3d_blobs_and_remove_thin_blobs(etsam_stage2_seg_mask, min_z_span=post_process_min_z_span)
+            post_processed_mask = identify_3d_blobs_and_remove_thin_blobs(mask, min_z_span=post_process_min_z_span)
             print("==> Saving post-processed mask")
             os.makedirs(os.path.dirname(output_post_processed_mask_file_path), exist_ok=True)
             save_mask(post_processed_mask, voxel_size, output_post_processed_mask_file_path)
