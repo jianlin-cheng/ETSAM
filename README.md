@@ -9,6 +9,27 @@ Cryogenic Electron Tomography (cryo-ET) is an emerging experimental technique to
 
 (A) shows the pipeline of the two-stage ETSAM. (B) shows the network architecture of the ETSAM block used in both stage 1 and stage 2.
 
+# Requirements
+## Hardware Requirements
+ETSAM requires:
+- a GPU with atleast 2GB VRAM supported by [pytorch](https://pytorch.org/get-started/locally/), 4GB VRAM recommended.
+- atleast 16GB CPU RAM, recommended 32GB.
+
+Tested on
+- Intel® Core™ i7-14700K
+- NVIDIA GeForce RTX 4070 with 12GB VRAM
+- 32 GB DDR5 CPU RAM
+
+## Operating System
+- Linux (Tested in Fedora 43)
+- Windows/macOS (should work, but Untested)
+
+## Software Requirements
+- `conda` (preferably installed through [Miniforge](https://conda-forge.org/download/)). Used to install python and required python package dependencies. 
+    - Tested with conda version 25.11.0.
+- Compute stack such as Nvidia CUDA/AMD ROCm/etc as needed to run [pytorch](https://pytorch.org/get-started/locally/) on the GPU.
+    - Tested with NVIDIA CUDA 13.0 and Driver version 580.119.02.
+
 # Installation
 
 ### Clone the project
@@ -29,6 +50,7 @@ conda env create -f environment.yml
 conda activate etsam
 ```
 
+Typically takes around 5-10mins to install ETSAM. Installation time may vary based on your internet speed.
 # Usage
 ## Run ETSAM on a sample cryo-ET tomogram:
 ```
@@ -66,6 +88,9 @@ propagate in video: 100%|██████████████████�
 ==> Saving predicted mask
 -------------------------------------------------------------------------------------------------
 ```
+
+> It takes about ~1min 30seconds to run in my NVIDIA RTX 4070 GPU. May vary based on your hardware specification.
+
 Visualizing the tomogram and predicted output stored `results/cdp_run_8354/ycw2013-01-03-15_etsam_predicted_mask.mrc`:
 
 ![Example-1](<assets/github-example-1.png>)
