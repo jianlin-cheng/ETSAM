@@ -14,7 +14,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import inference
 
 MEMBRANE_OBJECT_ID = 1
-dice_metric = DiceMetric(include_background=True, reduction="mean", num_classes=1)
 
 def min_max_normalize(array):
     array = (array - np.min(array)) / (np.max(array) - np.min(array))
@@ -36,20 +35,28 @@ def save_logits(logits, voxel_size, output_map_file_path):
         mrc.voxel_size = voxel_size
 
 def compute_dice_iou_precision_recall(mask, gt_mask):
+    # Create a fresh DiceMetric instance for each computation to avoid state accumulation
+    dice_metric = DiceMetric(include_background=True, reduction="mean", num_classes=1)
     mask_tensor = torch.from_numpy(mask).unsqueeze(0).unsqueeze(0).to("cuda")
     gt_mask_tensor = torch.from_numpy(gt_mask).unsqueeze(0).unsqueeze(0).to("cuda")
     dice = dice_metric(mask_tensor, gt_mask_tensor).item()
     iou = compute_iou(mask_tensor, gt_mask_tensor).item()
     precision = binary_precision(mask_tensor, gt_mask_tensor).item()
     recall = binary_recall(mask_tensor, gt_mask_tensor).item()
+    # Explicitly delete tensors and clear CUDA cache
+    del mask_tensor, gt_mask_tensor, dice_metric
+    torch.cuda.empty_cache()
     return dice, iou, precision, recall
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("eval.py")
+    parser = argparse.ArgumentParser("evaluate_etsam.py")
     parser.add_argument("--csv", help="CSV file containing the test dataset", default="data/testset.csv", type=str)
     parser.add_argument("--collection-dir", help="Collection directory containing the test dataset", default="data/collection", type=str)
     parser.add_argument("--output-dir", help="Output directory to store the results", default="results/etsam_testset_predictions", type=str)
-    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_results.csv", type=str)
+    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_predictions/results.csv", type=str)
+    parser.add_argument("--stage1-prompt", help="Stage 1 prompt method", default="grid_zero", type=str)
+    parser.add_argument("--stage2-prompt", help="Stage 2 prompt method", default="zero", type=str)
+    parser.add_argument("--stage2-logit-threshold", help="Stage 2 logit threshold", default=-0.25, type=float)
 
     args = parser.parse_args()
     csv_file = os.path.abspath(args.csv)
@@ -61,10 +68,10 @@ if __name__ == "__main__":
     stage1_ckpt_path = "checkpoints/etsam_stage1_v1.pt"
     stage2_ckpt_path = "checkpoints/etsam_stage2_v1.pt"
     config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
-    stage1_prompt = "grid_zero" # "zero", "grid" or "grid_zero"
-    stage2_prompt = "etsam_stage1_partial" # "zero", "grid", "grid_zero" or "etsam_stage1_partial"
-    stage1_logit_threshold = 0.0
-    stage2_logit_threshold = -0.5
+    stage1_prompt = args.stage1_prompt # "zero", "grid" or "grid_zero"
+    stage2_prompt = args.stage2_prompt # "zero", "grid", "grid_zero" or "etsam_stage1_partial"
+    stage1_logit_threshold = 0.0 # threshold for converting predicted logits (likelihood scores) to binary mask
+    stage2_logit_threshold = args.stage2_logit_threshold # threshold for converting predicted logits (likelihood scores) to binary mask
 
     results_df = pd.DataFrame()
     df = pd.read_csv(csv_file, dtype={'dataset_id': str, 'run_id': str})
@@ -134,6 +141,10 @@ if __name__ == "__main__":
             print(f"Final Stage 2 => Dice: {stage2_dice}, IoU: {stage2_iou}, Precision: {stage2_precision}, Recall: {stage2_recall}")
             results_df.to_csv(results_file, index=False)
             print("-------------------------------------------------------------------------------------------------")
+            
+            # Clear intermediate variables before saving files
+            del stage1_dice, stage1_iou, stage1_precision, stage1_recall
+            del stage2_dice, stage2_iou, stage2_precision, stage2_recall
 
             stage1_output_mask_file_path = os.path.join(output_dir, dataset_id, run_id, f"{dataset_id}_{run_id}_etsam_stage1_seg_mask.mrc")
             stage1_output_logits_file_path = os.path.join(output_dir, dataset_id, run_id, f"{dataset_id}_{run_id}_etsam_stage1_seg_logits.mrc")
@@ -148,8 +159,12 @@ if __name__ == "__main__":
             save_mask(etsam_stage2_seg_mask, voxel_size, stage2_output_mask_file_path)
             save_logits(etsam_stage2_seg_logits, voxel_size, stage2_output_logits_file_path)
 
+            # Explicitly delete all intermediate variables and clear CUDA cache
             del tomogram_data, gt_mask, etsam_stage1_seg_logits, etsam_stage1_seg_mask, etsam_stage2_seg_logits, etsam_stage2_seg_mask, combined_input_data, per_obj_output_mask_full
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
+            if hasattr(torch.cuda, "ipc_collect"):
+                torch.cuda.ipc_collect()
         except Exception as e:
             print("Error: "+str(e))
 

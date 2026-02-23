@@ -177,16 +177,25 @@ While we recommend using the post-processing technique to improve the visual cla
 Information on how to setup dataset and train ETSAM can be found in [training/README.md](training/README.md).
 
 # Evaluating ETSAM on the test dataset
-Download the test dataset
+1. Download the test dataset
 ```
 python scripts/collect_data.py --csv data/testset.csv --collection-dir data/collection
 ```
-Run the script to evaluate ETSAM on the test dataset and store the results.
+
+2. Run the script to evaluate ETSAM on the test dataset. Calculates Dice, IoU, Precision, Recall and stores in `results/etsam_testset_predictions/results.csv`.
 ```
-python scripts/evaluate_etsam.py \
-    --results etsam_testset_results.csv \
-    --csv data/testset.csv \
-    --collection-dir data/collection
+python evaluation/evaluate_etsam.py
+```
+
+3. To perform t-test for each of the above metrics:
+```
+python evaluation/t-test.py
+```
+> Note: TARDIS and Membrain-Seg were evaluated prior and results are stored in results/ directory.
+
+4. To compute AUPRC and plot Precision-Recall (PR) curve:
+```
+python evaluation/pr_curve_auprc.py
 ```
 
 # Cite
