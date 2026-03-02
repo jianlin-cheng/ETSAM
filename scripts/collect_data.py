@@ -23,7 +23,7 @@ def get_harvard_file_name_and_id(dataset_id, run_id, file_type="target_mask"):
     for file in harvard_dataset_files:
         if file['directoryLabel'] == file_dir:
             return file['label'], file['dataFile']['id']
-    return None
+    return "", None
 
 def download_https(
     url: str,
@@ -50,8 +50,17 @@ def download_experimental_tomogram(dataset_id, run_id, run_dir):
     tomogram_dir = os.path.join(run_dir, "tomogram")
     os.makedirs(tomogram_dir, exist_ok=True)
 
-    tomogram = Run.find(client, [Run.id == run_id])[0].tomograms[0]
-    tomogram.download_mrcfile(dest_path=tomogram_dir)
+    try:
+        tomogram = Run.find(client, [Run.id == run_id])[0].tomograms[0]
+        tomogram.download_mrcfile(dest_path=tomogram_dir)
+    except Exception as e:
+        file_name, file_id = get_harvard_file_name_and_id(dataset_id, run_id, file_type="tomogram")
+        if file_id is None:
+            print(f"Error: No target mask file found for Dataset: {dataset_id} Run: {run_id}")
+            exit()
+
+        tomogram_file = os.path.join(tomogram_dir, file_name)
+        download_https(f"{HARVARD_DATAVERSE_SERVER_URL}/api/access/datafile/{file_id}", tomogram_file)
 
     # download the target mask from Harvard Dataverse
     print(f"--> Downloading target mask for Dataset: {dataset_id} Run: {run_id}")
