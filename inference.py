@@ -65,6 +65,7 @@ def vos_inference(
     prompt_method="grid",
     offload_video_to_cpu=True,
     offload_state_to_cpu=True,
+    grid_interval=50,
 ):
     print("==> Preprocessing the input map")
 
@@ -81,13 +82,12 @@ def vos_inference(
     height = inference_state["video_height"]
     width = inference_state["video_width"]
     num_frames = inference_state["num_frames"]
-    grid_interval = 50
     grid_point_size = 1
     # pred_masks_on_prompt_frames = {}
 
     if prompt_method == "grid":
         input_frame_inds = np.arange(0, num_frames, grid_interval)  # Indices of frames to use as input masks
-        print("using grid of points at every 50th slice as mask prompt")
+        print(f"using grid of points at every {grid_interval}th slice as mask prompt")
         object_ids_set = None
         for input_frame_idx in input_frame_inds:
             try:
@@ -136,7 +136,7 @@ def vos_inference(
                 # pred_masks_on_prompt_frames[input_frame_idx] = video_res_masks
     elif prompt_method == "grid_zero":
         input_frame_inds = [0]
-        print("using grid of points at first slice as mask prompt")
+        print(f"using grid of points at first slice as mask prompt (grid_interval={grid_interval})")
         object_ids_set = None
         for input_frame_idx in input_frame_inds:
             try:
@@ -215,9 +215,8 @@ def vos_inference(
                     mask=object_mask,
                 )
     elif prompt_method == "etsam_stage1_partial":
-        interval = 50
-        input_frame_inds = np.arange(0, num_frames, interval)  # Indices of frames to use as input masks
-        print("using ETSAM stage 1 predicted mask at every 50th slice as prompt")
+        input_frame_inds = np.arange(0, num_frames, grid_interval)  # Indices of frames to use as input masks
+        print(f"using ETSAM stage 1 predicted mask at every {grid_interval}th slice as prompt")
         object_ids_set = None
         for input_frame_idx in input_frame_inds:
             try:
@@ -297,6 +296,7 @@ def etsam_inference(
     prompt_method="grid_zero",
     offload_video_to_cpu=True,
     offload_state_to_cpu=True,
+    grid_interval=50,
 ):
     """Run ETSAM inference on a single tomogram."""
     hydra_overrides_extra = [
@@ -322,4 +322,5 @@ def etsam_inference(
         prompt_method=prompt_method,
         offload_video_to_cpu=offload_video_to_cpu,
         offload_state_to_cpu=offload_state_to_cpu,
+        grid_interval=grid_interval,
     )

@@ -1,159 +1,293 @@
 import argparse
-import mrcfile
 import os
+
+import mrcfile
 import numpy as np
+import torch
+
 import inference
-from scipy.ndimage import label as cc_label
-from scipy.ndimage import find_objects
+import postprocess
 
 MEMBRANE_OBJECT_ID = 1
+
 
 def min_max_normalize(array):
     array = (array - np.min(array)) / (np.max(array) - np.min(array))
     return array
+
 
 def min_max_postive_values_normalize(array):
     array[array < 0] = 0
     array = array / np.max(array)
     return array
 
+
+def normalize_95_percentile(array):
+    array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    array = array / np.percentile(array, 95)
+    return array
+
+
+def min_max_postive_values_normalize_95_percentile(array):
+    array[array < 0] = 0
+    array = array / np.percentile(array, 95)
+    return array
+
+
+def elu_minmax_normalize(array):
+    array = torch.nn.functional.elu(torch.from_numpy(array)).cpu().numpy()
+    array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    return array
+
+
+def softplus_minmax_normalize(array):
+    array = torch.nn.functional.softplus(torch.from_numpy(array)).cpu().numpy()
+    array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    return array
+
+
 def save_mask(mask, voxel_size, output_map_file_path):
     with mrcfile.new(output_map_file_path, overwrite=True) as mrc:
         mrc.set_data(mask.astype(np.uint8))
         mrc.voxel_size = voxel_size
 
+
 def save_logits(logits, voxel_size, output_map_file_path):
-    with mrcfile.new_mmap(output_map_file_path, shape=logits.shape, mrc_mode=2, fill = 0, overwrite=True) as mrc:
+    with mrcfile.new_mmap(
+        output_map_file_path, shape=logits.shape, mrc_mode=2, fill=0, overwrite=True
+    ) as mrc:
         mrc.set_data(logits)
         mrc.voxel_size = voxel_size
 
-def _full_structure_3d() -> np.ndarray:
-    """Return a 3x3x3 structuring element for full (26) connectivity."""
-    return np.ones((3, 3, 3), dtype=int)
 
-def identify_3d_blobs_and_remove_thin_blobs(ip_mrc_data: np.ndarray, min_z_span: int = 3) -> np.ndarray:
+def split_into_quadrants(tomogram_data):
     """
-    Identify 3D connected components (blobs) in a 3D mask and remove those that
-    do not span at least `min_z_span` slices along the Z-axis.
+    Split a (Z, Y, X) tomogram into 4 sub-tomograms by halving Y and X.
 
-    Inputs
-    - ip_mrc_data: 3D numpy array (Z, Y, X). Non-zero voxels are treated as foreground.
-    - min_z_span: minimum number of Z slices a component must span to be kept (>= 1).
-    - connectivity: fixed to full 26-connectivity.
-
-    Output
-    - 3D numpy array mask of the same shape and dtype as input, where thin blobs are removed.
+    Returns a list of (sub_tomogram, (y_start, y_end, x_start, x_end)) tuples.
     """
-    if ip_mrc_data is None:
-        raise ValueError("ip_mrc_data is None")
-    if ip_mrc_data.ndim != 3:
-        raise ValueError(f"Expected a 3D array, got shape {ip_mrc_data.shape}")
-    if min_z_span < 1:
-        raise ValueError("min_z_span must be >= 1")
+    _, H, W = tomogram_data.shape
+    y_mid = H // 2
+    x_mid = W // 2
 
-    # Treat any non-zero value as foreground
-    mask = ip_mrc_data.astype(bool)
-    if not mask.any():
-        # Nothing to do
-        return np.zeros_like(ip_mrc_data)
+    quadrants = [
+        (tomogram_data[:, :y_mid, :x_mid], (0, y_mid, 0, x_mid)),
+        (tomogram_data[:, :y_mid, x_mid:], (0, y_mid, x_mid, W)),
+        (tomogram_data[:, y_mid:, :x_mid], (y_mid, H, 0, x_mid)),
+        (tomogram_data[:, y_mid:, x_mid:], (y_mid, H, x_mid, W)),
+    ]
+    return quadrants
 
-    structure = _full_structure_3d()
-    labels, num = cc_label(mask, structure=structure)
-    if num == 0:
-        return np.zeros_like(ip_mrc_data)
 
-    # Get bounding boxes for each labeled component
-    slices = find_objects(labels)
-    # Build an array indicating which labels to keep based on Z-span
-    keep = np.zeros(num + 1, dtype=bool)  # index 0 is background
-    for idx, slc in enumerate(slices, start=1):
-        if slc is None:
-            keep[idx] = False
-            continue
-        z_slice = slc[0]  # assuming array order is (Z, Y, X)
-        z_span = (z_slice.stop - z_slice.start) if z_slice is not None else 0
-        keep[idx] = z_span >= min_z_span
+def run_two_stage_inference_on_tomogram(
+    tomogram_data,
+    config,
+    stage1_ckpt_path,
+    stage2_ckpt_path,
+    stage1_prompt,
+    stage2_prompt,
+    grid_interval,
+    stage1_logit_threshold,
+):
+    """
+    Run the two-stage ETSAM pipeline on a (Z, Y, X) volume (full tomogram or a sub-region).
 
-    filtered_mask = keep[labels]
+    Normalizes the volume, runs stage 1, fuses logits with the normalized tomogram, then runs stage 2.
 
-    # Cast back to input dtype (preserving mask semantics)
-    if ip_mrc_data.dtype == np.bool_:
-        return filtered_mask
-    else:
-        return filtered_mask.astype(ip_mrc_data.dtype)
+    Returns the stage-2 logits array matching the input spatial shape.
+    """
+    print(f"==> Stage 1 prediction (prompt: {stage1_prompt})")
+    stage1_logits = inference.etsam_inference(
+        tomogram_data,
+        config_path=config,
+        ckpt_path=stage1_ckpt_path,
+        prompt_method=stage1_prompt,
+        grid_interval=grid_interval,
+    )[MEMBRANE_OBJECT_ID]
+
+    stage1_mask = (stage1_logits > stage1_logit_threshold).astype(np.uint8)
+    stage1_logits[stage1_logits < -5] = -5
+    stage1_logits[stage1_logits > 5] = 5
+    stage1_logits = min_max_normalize(stage1_logits)
+    combined_input = tomogram_data + stage1_logits
+
+    print(f"==> Stage 2 prediction (prompt: {stage2_prompt})")
+    stage2_logits = inference.etsam_inference(
+        combined_input,
+        stage1_mask,
+        config_path=config,
+        ckpt_path=stage2_ckpt_path,
+        prompt_method=stage2_prompt,
+        grid_interval=grid_interval,
+    )[MEMBRANE_OBJECT_ID]
+
+    return stage2_logits
+
+
+def combine_quadrant_logits(quadrant_results, full_shape):
+    """
+    Assemble per-quadrant logit arrays into a single (Z, Y, X) volume.
+
+    quadrant_results: list of (logits, (y_start, y_end, x_start, x_end))
+    full_shape: (Z, Y, X) of the original tomogram
+    """
+    combined = np.zeros(full_shape, dtype=np.float32)
+    for logits, (y_start, y_end, x_start, x_end) in quadrant_results:
+        combined[:, y_start:y_end, x_start:x_end] = logits
+    return combined
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser("eval.py")
-    parser.add_argument("input_tomogram_file_path", help="input tomogram file path", type=str)
+    parser = argparse.ArgumentParser("etsam.py")
+    parser.add_argument(
+        "input_tomogram_file_path", help="input tomogram file path", type=str
+    )
     parser.add_argument("--output-dir", help="Output directory", type=str, default="./")
-    parser.add_argument("--logit-threshold", help="threshold for converting preditcted logits (likelihood scores) to binary mask", type=float, default=-0.25)
-    parser.add_argument("--store-logits", help="store predicted logits (likelihood scores) in separate file along with binary mask", action="store_true")
-    parser.add_argument("--post-process", help="post process the predicted binary mask and store it in a separate file", action="store_true")
-    parser.add_argument("--post-process-min-slices", help="minimum number of Z slices a blob (connected component) must span to be kept", type=int, default=10)
+    parser.add_argument(
+        "--logit-threshold",
+        help="threshold for converting preditcted logits (likelihood scores) to binary mask",
+        type=float,
+        default=-0.25,
+    )
+    parser.add_argument(
+        "--store-logits",
+        help="store predicted logits (likelihood scores) in separate file along with binary mask",
+        action="store_true",
+    )
+    postprocess.add_postprocess_arguments(parser)
+    parser.add_argument(
+        "--split-processing",
+        help="split the tomogram into four smaller tomograms (Y/X), run etsam on them independently, then merge the results; use for complex tomograms with closely apposed cell membranes",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--stage1-prompt",
+        help="prompt for stage 1 (grid or zero)",
+        type=str,
+        default="grid_zero",
+        choices=["zero", "grid", "grid_zero"],
+    )
+    parser.add_argument(
+        "--stage2-prompt",
+        help="prompt for stage 2 (zero, grid or etsam_stage1_partial)",
+        type=str,
+        default="etsam_stage1_partial",
+        choices=["zero", "grid", "grid_zero", "etsam_stage1_partial"],
+    )
 
     args = parser.parse_args()
     stage1_ckpt_path = "checkpoints/etsam_stage1_v1.pt"
     stage2_ckpt_path = "checkpoints/etsam_stage2_v1.pt"
     config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
-    stage1_prompt = "grid_zero" # "zero", "grid"
-    stage2_prompt = "zero" # "zero", "grid" or "etsam_stage1_partial"
+    stage1_prompt = args.stage1_prompt
+    stage2_prompt = args.stage2_prompt
     store_logits = args.store_logits
-    stage1_logit_threshold = 0.0
+    stage1_logit_threshold = -0.25
     stage2_logit_threshold = args.logit_threshold
-    post_process = args.post_process
-    post_process_min_z_span = args.post_process_min_slices
+    split_processing = args.split_processing
+    grid_interval = 10 if split_processing else 50
     input_tomogram_file_path = os.path.abspath(args.input_tomogram_file_path)
     output_dir = os.path.abspath(args.output_dir)
-
-    output_mask_file_path = os.path.join(output_dir, f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_mask.mrc")
-    output_logits_file_path = os.path.join(output_dir, f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_logits.mrc")
-    output_post_processed_mask_file_path = os.path.join(output_dir, f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc")
 
     try:
         print("==> Reading input tomogram:", input_tomogram_file_path)
         with mrcfile.open(input_tomogram_file_path) as mrc:
             voxel_size = mrc.voxel_size
             input_tomogram_shape = mrc.data.shape
-            tomogram_data = mrc.data.copy()
+            tomogram_data = mrc.data.astype(np.float32)
         print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
-        # Normalize tomogram data
-        tomogram_data = min_max_postive_values_normalize(tomogram_data)
-        
-        # STAGE 1 Prediction
-        print(f"==> Running Stage 1 Prediction with Prompt Method: {stage1_prompt}")
-        logits = inference.etsam_inference(tomogram_data, config_path=config, ckpt_path=stage1_ckpt_path, prompt_method=stage1_prompt)[MEMBRANE_OBJECT_ID]
-        # mask = (logits > stage1_logit_threshold).astype(np.uint8)
-        mask = None
+        print(f"==> Normalizing tomogram data")
+        normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
 
-        # Normalize stage 1 logits and add to tomogram data
-        logits[logits < -5] = -5
-        logits[logits > 5] = 5
-        logits = min_max_normalize(logits)
-        combined_input_data = tomogram_data + logits
-        
-        # STAGE 2 Prediction
-        print(f"==> Running Stage 2 Prediction with Prompt Method: {stage2_prompt}")
-        logits = inference.etsam_inference(combined_input_data, mask, config_path=config, ckpt_path=stage2_ckpt_path, prompt_method=stage2_prompt)[MEMBRANE_OBJECT_ID]
+        if split_processing:
+            output_mask_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_split_processing_mask.mrc",
+            )
+            output_logits_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_split_processing_logits.mrc",
+            )
+            output_post_processed_mask_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_split_processing_post_processed_mask.mrc",
+            )
+
+            quadrants = split_into_quadrants(normalized_tomogram_data)
+            quadrant_labels = ["top-left", "top-right", "bottom-left", "bottom-right"]
+            print(
+                f"==> Split tomogram into {len(quadrants)} sub-tomograms (split-processing mode, grid_interval={grid_interval})"
+            )
+            for label, (sub, (y0, y1, x0, x1)) in zip(quadrant_labels, quadrants):
+                print(f"    {label}: shape {sub.shape}, Y[{y0}:{y1}] X[{x0}:{x1}]")
+
+            quadrant_results = []
+            for label, (sub_tomogram, coords) in zip(quadrant_labels, quadrants):
+                print(f"\n==> Processing quadrant: {label}")
+                q_logits = run_two_stage_inference_on_tomogram(
+                    sub_tomogram,
+                    config,
+                    stage1_ckpt_path,
+                    stage2_ckpt_path,
+                    stage1_prompt,
+                    stage2_prompt,
+                    grid_interval=grid_interval,
+                    stage1_logit_threshold=stage1_logit_threshold,
+                )
+                quadrant_results.append((q_logits, coords))
+
+            print("\n==> Combining quadrant logits into full volume")
+            logits = combine_quadrant_logits(quadrant_results, input_tomogram_shape)
+        else:
+            output_mask_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_mask.mrc",
+            )
+            output_logits_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_logits.mrc",
+            )
+            output_post_processed_mask_file_path = os.path.join(
+                output_dir,
+                f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc",
+            )
+
+            logits = run_two_stage_inference_on_tomogram(
+                normalized_tomogram_data,
+                config,
+                stage1_ckpt_path,
+                stage2_ckpt_path,
+                stage1_prompt,
+                stage2_prompt,
+                grid_interval=grid_interval,
+                stage1_logit_threshold=stage1_logit_threshold,
+            )
+
         mask = (logits > stage2_logit_threshold).astype(np.uint8)
 
         print("==> Saving predicted mask")
         os.makedirs(output_dir, exist_ok=True)
         save_mask(mask, voxel_size, output_mask_file_path)
-        
+
         if store_logits:
             print("==> Saving segmentation logits")
             os.makedirs(os.path.dirname(output_logits_file_path), exist_ok=True)
             save_logits(logits, voxel_size, output_logits_file_path)
-        
-        if post_process:
-            print("==> Post-processing the predicted mask")
-            post_processed_mask = identify_3d_blobs_and_remove_thin_blobs(mask, min_z_span=post_process_min_z_span)
-            print("==> Saving post-processed mask")
-            os.makedirs(os.path.dirname(output_post_processed_mask_file_path), exist_ok=True)
-            save_mask(post_processed_mask, voxel_size, output_post_processed_mask_file_path)
 
-        print("-------------------------------------------------------------------------------------------------")
+        if postprocess.postprocess_requested(args):
+            post_processed_mask = postprocess.postprocess_cli(mask, args)
+            print("==> Saving post-processed mask")
+            os.makedirs(
+                os.path.dirname(output_post_processed_mask_file_path), exist_ok=True
+            )
+            save_mask(
+                post_processed_mask, voxel_size, output_post_processed_mask_file_path
+            )
+
+        print(
+            "-------------------------------------------------------------------------------------------------"
+        )
 
     except Exception as e:
-        print("Error: "+str(e))
+        print("Error: " + str(e))
