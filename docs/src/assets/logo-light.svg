@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 172 48" role="img" aria-labelledby="title">
+  <title id="title">ETSAM</title>
+  <rect width="172" height="48" rx="14" fill="#f8fbff"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5">
+    <path d="M18 31c8-18 21-18 29 0" stroke="#0891b2"/>
+    <path d="M20 22c9-8 18-8 25 0" stroke="#7c3aed" opacity=".82"/>
+    <circle cx="25" cy="24" r="2.2" fill="#0891b2" stroke="none"/>
+    <circle cx="40" cy="24" r="2.2" fill="#7c3aed" stroke="none"/>
+  </g>
+  <text x="60" y="31" fill="#0f172a" font-family="Inter, system-ui, sans-serif" font-size="21" font-weight="800" letter-spacing="-.04em">ETSAM</text>
+</svg>

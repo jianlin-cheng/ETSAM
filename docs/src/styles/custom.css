@@ -1,0 +1,426 @@
+:root {
+  --sl-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --sl-color-accent-low: #d9f7ff;
+  --sl-color-accent: #0891b2;
+  --sl-color-accent-high: #0e7490;
+  --sl-color-white: #111827;
+  --sl-color-gray-1: #1f2937;
+  --sl-color-gray-2: #334155;
+  --sl-color-gray-3: #64748b;
+  --sl-color-gray-4: #cbd5e1;
+  --sl-color-gray-5: #e2e8f0;
+  --sl-color-gray-6: #f1f5f9;
+  --sl-color-black: #ffffff;
+  --sl-content-width: 66rem;
+  --sl-text-5xl: clamp(3.5rem, 11vw, 7rem);
+
+  /* Tone down content heading sizes (Starlight derives h1–h5 from these). */
+  --sl-text-h1: 1.75rem;
+  --sl-text-h2: 1.35rem;
+  --sl-text-h3: 1.15rem;
+  --sl-text-h4: 1rem;
+  --sl-text-h5: 0.9rem;
+}
+
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #082f49;
+  --sl-color-accent: #22d3ee;
+  --sl-color-accent-high: #cffafe;
+  --sl-color-white: #f8fafc;
+  --sl-color-gray-1: #e2e8f0;
+  --sl-color-gray-2: #cbd5e1;
+  --sl-color-gray-3: #94a3b8;
+  --sl-color-gray-4: #475569;
+  --sl-color-gray-5: #1e293b;
+  --sl-color-gray-6: #0f172a;
+  --sl-color-black: #020617;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--sl-color-accent) 14%, transparent), transparent 34rem),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.08), transparent 30rem),
+    var(--sl-color-black);
+}
+
+.header {
+  border-bottom-color: color-mix(in srgb, var(--sl-color-gray-5) 70%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 16%, transparent);
+  border-radius: 1.75rem;
+  padding: clamp(3rem, 8vw, 6rem) clamp(1.25rem, 5vw, 4rem);
+  min-height: clamp(26rem, 45vw, 33rem);
+  background:
+    linear-gradient(140deg, color-mix(in srgb, var(--sl-color-accent) 10%, transparent), transparent 46%),
+    linear-gradient(320deg, rgba(124, 58, 237, 0.1), transparent 42%),
+    color-mix(in srgb, var(--sl-color-gray-6) 78%, transparent);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--sl-color-accent) 8%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--sl-color-accent) 8%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at 50% 32%, black, transparent 72%);
+}
+
+.hero > * {
+  position: relative;
+}
+
+.hero h1 {
+  letter-spacing: -0.08em;
+  background: linear-gradient(135deg, var(--sl-color-white), var(--sl-color-accent), #8b5cf6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero .tagline {
+  max-width: 54rem;
+  margin-inline: auto;
+  color: var(--sl-color-gray-2);
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+}
+
+[data-theme="dark"] .hero .tagline {
+  color: var(--sl-color-gray-2);
+}
+
+.home-panel,
+.pipeline-card,
+.stat-card {
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 14%, var(--sl-color-gray-5));
+  background: color-mix(in srgb, var(--sl-color-gray-6) 80%, transparent);
+}
+
+.home-panel {
+  max-width: 62rem;
+  margin: 2rem auto 3rem;
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  border-radius: 1.25rem;
+  text-align: center;
+}
+
+.home-panel h2,
+.pipeline-card h2 {
+  margin-block: 0.3rem 0.85rem;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: -0.05em;
+}
+
+.home-panel p:last-child,
+.pipeline-card p {
+  max-width: 48rem;
+  margin-inline: auto;
+  color: var(--sl-color-gray-2);
+  font-size: 1.03rem;
+}
+
+.eyebrow {
+  color: var(--sl-color-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(1rem, 2.4vw, 2rem);
+  align-items: center;
+  margin: 0 0 2.5rem;
+}
+
+.hero-quickstart {
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 14%, var(--sl-color-gray-5));
+  background: color-mix(in srgb, var(--sl-color-gray-6) 82%, transparent);
+  border-radius: 1rem;
+  padding: 0.9rem;
+}
+
+.landing-hero-copy h1 {
+  margin: 0 0 0.85rem;
+  font-size: clamp(2.6rem, 6.2vw, 5.4rem);
+}
+
+.landing-hero-copy .tagline {
+  margin: 0 0 1.25rem;
+  max-width: 42rem;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.hero-actions .sl-link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hero-btn-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.hero-quickstart .eyebrow {
+  margin: 0 0 0.25rem 0.25rem;
+}
+
+.hero-quickstart .expressive-code {
+  margin: 0.2rem 0 0;
+}
+
+.card-grid {
+  margin-block: 2rem 4rem;
+}
+
+.card {
+  border-radius: 1rem;
+  border-color: color-mix(in srgb, var(--sl-color-accent) 12%, var(--sl-color-gray-5));
+}
+
+.pipeline-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(18rem, 1.1fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  margin-block: 3rem;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border-radius: 1.25rem;
+}
+
+.pipeline-card figure,
+.docs-figure {
+  margin: 0;
+}
+
+.pipeline-card img,
+.docs-figure img {
+  width: 100%;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 0.85rem;
+}
+
+.pipeline-card figcaption,
+.docs-figure figcaption {
+  margin-top: 0.75rem;
+  color: var(--sl-color-gray-3);
+  font-size: 0.86rem;
+  text-align: center;
+}
+
+.docs-figure {
+  margin-block: 1.5rem 2rem;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 3rem 0 4rem;
+}
+
+.stat-card {
+  border-radius: 0.9rem;
+  padding: 1.2rem;
+  text-align: center;
+}
+
+.stat-card strong {
+  display: block;
+  color: var(--sl-color-accent);
+  font-family: var(--sl-font-mono);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+.stat-card span {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--sl-color-gray-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Lighter heading weight throughout content + page title. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+.content-panel h1 {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+main table {
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+/* Force Shiki token colors to apply on every page.
+   Expressive Code's generated rule is gated behind a
+   `[data-theme='github-light']` attribute that Starlight does not
+   actually set on the wrappers, so tokens lose their color. We
+   re-declare the same rule unconditionally here. */
+.expressive-code .ec-line span[style*="--0:"]:not([class]) {
+  color: var(--0, inherit);
+  background-color: var(--0bg, transparent);
+  font-style: var(--0fs, inherit);
+  font-weight: var(--0fw, inherit);
+  text-decoration: var(--0td, inherit);
+}
+
+/* ── Code blocks: light "terminal output" look ───────────────── */
+
+.expressive-code {
+  margin-block: 1.4rem;
+}
+
+/* Outer frame = the terminal window */
+.expressive-code .frame {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #fafbfc;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+
+/* Force every frame (editor or terminal) to render the title bar
+   in our light "terminal" palette. */
+.expressive-code .frame .header {
+  display: flex !important;
+  align-items: center;
+  background: #f1f5f9 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  padding: 0.45rem 0.85rem !important;
+  min-height: 2rem;
+  font-family: var(--sl-font-mono);
+  font-size: 0.72rem;
+  color: #475569 !important;
+  letter-spacing: 0.02em;
+}
+
+/* Traffic-light dots for the terminal-style frames.
+   Render them ourselves so they stay in light theme regardless of
+   what Expressive Code injects. */
+.expressive-code .frame.is-terminal .header::before {
+  content: "";
+  display: inline-block;
+  flex-shrink: 0;
+  width: 2.6rem;
+  height: 0.7rem;
+  margin-right: 0.65rem;
+  background:
+    radial-gradient(circle at 0.35rem 0.35rem, #f87171 0.32rem, transparent 0.34rem),
+    radial-gradient(circle at 1.3rem 0.35rem, #fbbf24 0.32rem, transparent 0.34rem),
+    radial-gradient(circle at 2.25rem 0.35rem, #34d399 0.32rem, transparent 0.34rem);
+  background-repeat: no-repeat;
+}
+
+/* Hide EC's own dot rendering so we don't get duplicates. */
+.expressive-code .frame.is-terminal .header svg,
+.expressive-code .frame.is-terminal .header > .title-dots {
+  display: none !important;
+}
+
+/* Editor title bar (e.g. file name shown in fenced ``` blocks with title). */
+.expressive-code .frame:not(.is-terminal) .header .title,
+.expressive-code .frame:not(.is-terminal) .header .tab {
+  background: #fafbfc !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  border-bottom: none !important;
+  border-top-left-radius: 0.4rem;
+  border-top-right-radius: 0.4rem;
+  padding: 0.25rem 0.7rem !important;
+  font-weight: 600;
+}
+
+/* Code body */
+.expressive-code .frame pre {
+  background: #fafbfc !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0.95rem 1.1rem !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.expressive-code .frame pre > code {
+  font-family: var(--sl-font-mono);
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+
+/* Copy button: subtle, matches the light palette */
+.expressive-code .copy button {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.4rem !important;
+  box-shadow: none !important;
+  color: #475569 !important;
+}
+.expressive-code .copy button:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Keep the same light palette in dark mode (background/borders only;
+   leave per-token colors to Shiki so syntax highlighting stays intact). */
+[data-theme="dark"] .expressive-code .frame,
+[data-theme="dark"] .expressive-code .frame pre {
+  background: #fafbfc !important;
+  border-color: #e2e8f0 !important;
+}
+[data-theme="dark"] .expressive-code .frame .header {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+main:has(.landing-hero) .sl-markdown-content > .sl-heading-wrapper.level-h1:first-child {
+  display: none;
+}
+
+/* Hide Starlight's auto page title block on landing page. */
+main:has(.landing-hero) > .content-panel:first-child {
+  display: none;
+}
+
+/* Inline code */
+:not(pre) > code {
+  background: color-mix(in srgb, var(--sl-color-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sl-color-accent) 18%, transparent);
+  color: var(--sl-color-accent-high);
+  border-radius: 0.35rem;
+  padding: 0.1em 0.4em;
+  font-size: 0.88em;
+}
+
+@media (max-width: 56rem) {
+  .landing-hero,
+  .pipeline-card,
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-hero.hero {
+    min-height: auto;
+  }
+}

@@ -1,0 +1,99 @@
+---
+title: ETSAM
+description: A two-stage SAM2-based model for effective membrane segmentation in cryo-electron tomograms.
+template: splash
+tableOfContents: false
+---
+
+import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
+
+<section class="landing-hero hero not-content" aria-label="ETSAM overview and quick start">
+  <div class="landing-hero-copy">
+    <h1>ETSAM</h1>
+    <p class="tagline">Effectively segmenting cell membranes in cryo-electron tomograms with a two-stage SAM2-based deep learning model.</p>
+    <div class="hero-actions">
+      <LinkButton href="/ETSAM/installation/" variant="primary" icon="download" iconPlacement="start">Installation</LinkButton>
+      <LinkButton href="/ETSAM/tutorial/" variant="primary" icon="open-book" iconPlacement="start">Tutorial</LinkButton>
+      <LinkButton href="https://doi.org/10.1101/2025.11.23.689996" variant="minimal" icon="external" target="_blank" rel="noreferrer">Read Preprint</LinkButton>
+      <LinkButton href="https://github.com/jianlin-cheng/ETSAM" variant="minimal" icon="github" target="_blank" rel="noreferrer">View on GitHub</LinkButton>
+    </div>
+  </div>
+
+  <div class="hero-quickstart">
+    <p class="eyebrow">quick start</p>
+    ```bash
+    # 1. Clone the repository
+    git clone https://github.com/jianlin-cheng/ETSAM
+    cd ETSAM
+
+    # 2. Download model weights
+    wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage1_v1.pt
+    wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage2_v1.pt
+
+    # 3. Create and activate the conda environment
+    conda env create -f environment.yml
+    conda activate etsam
+
+    # 4. Run ETSAM on a tomogram
+    python etsam.py input_tomogram.mrc --output-dir results/
+    ```
+  </div>
+</section>
+
+<CardGrid stagger>
+  <Card title="Two-stage refinement" icon="puzzle">
+    Stage 1 generates an initial membrane mask from grid-point prompts. Stage 2 fuses that output with the normalized tomogram to refine membrane predictions.
+  </Card>
+  <Card title="SAM2-based architecture" icon="setting">
+    Fine-tuned on top of SAM2's video-prediction model, adapted for cryo-ET volume slices instead of standard RGB imagery.
+  </Card>
+  <Card title="Strong precision-recall trade-off" icon="star">
+    Benchmarked against TARDIS and MemBrain-Seg on independent simulated and experimental tomograms with state-of-the-art performance.
+  </Card>
+  <Card title="Practical inference speed" icon="rocket">
+    Processes a 500-slice tomogram in approximately 90 seconds on an NVIDIA RTX 4070 GPU.
+  </Card>
+  <Card title="Diverse training data" icon="open-book">
+    Trained on 83 experimental CryoET Data Portal tomograms and 28 PolNet simulated tomograms across diverse cell types.
+  </Card>
+  <Card title="Configurable outputs" icon="setting">
+    Tune logit thresholds, save raw likelihood scores, and apply optional 3D connected-component post-processing.
+  </Card>
+</CardGrid>
+
+<section class="pipeline-card not-content">
+  <div>
+    <p class="eyebrow">pipeline</p>
+    <h2>The ETSAM workflow</h2>
+    <p>Stage 1 prompts SAM2 with a grid on the first tomogram slice and propagates the prediction through the volume. Stage 2 combines the normalized tomogram with Stage 1 output and runs a second pass to improve the final binary membrane mask.</p>
+  </div>
+  <figure>
+    <img src="https://raw.githubusercontent.com/jianlin-cheng/ETSAM/main/assets/etsam-framework.png" alt="ETSAM two-stage pipeline architecture" loading="lazy" />
+    <figcaption>Two-stage ETSAM pipeline and block architecture.</figcaption>
+  </figure>
+</section>
+
+## About the Research
+
+Cryogenic Electron Tomography (cryo-ET) visualizes cell structures and macromolecules in their native environment. Accurate membrane segmentation is critical for understanding cellular organization, but low signal-to-noise ratio, missing wedge artifacts, and other noise sources make reliable segmentation challenging.
+
+ETSAM addresses these challenges by fine-tuning SAM2's video-prediction architecture and using a cascaded two-stage design where each stage's output informs the next. The model was developed and tested by Joel Selvaraj and Jianlin Cheng at the University of Missouri.
+
+:::note[Preprint]
+Selvaraj & Cheng (2025). *ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms.* bioRxiv. [doi:10.1101/2025.11.23.689996](https://doi.org/10.1101/2025.11.23.689996)
+:::
+
+### Cite
+
+```bibtex
+@article {Selvaraj2025.11.23.689996,
+    author    = {Selvaraj, Joel and Cheng, Jianlin},
+    title     = {ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms},
+    elocation-id = {2025.11.23.689996},
+    year      = {2025},
+    doi       = {10.1101/2025.11.23.689996},
+    publisher = {Cold Spring Harbor Laboratory},
+    eprint    = {https://www.biorxiv.org/content/early/2025/11/26/2025.11.23.689996.full.pdf},
+    journal   = {bioRxiv}
+}
+```
