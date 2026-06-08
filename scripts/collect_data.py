@@ -50,17 +50,27 @@ def download_experimental_tomogram(dataset_id, run_id, run_dir):
     tomogram_dir = os.path.join(run_dir, "tomogram")
     os.makedirs(tomogram_dir, exist_ok=True)
 
-    try:
-        tomogram = Run.find(client, [Run.id == run_id])[0].tomograms[0]
-        tomogram.download_mrcfile(dest_path=tomogram_dir)
-    except Exception as e:
+    if "emdb" in dataset_id or "empiar" in dataset_id:
         file_name, file_id = get_harvard_file_name_and_id(dataset_id, run_id, file_type="tomogram")
         if file_id is None:
-            print(f"Error: No target mask file found for Dataset: {dataset_id} Run: {run_id}")
+            print(f"Error: No tomogram file found for Dataset: {dataset_id} Run: {run_id}")
             exit()
 
         tomogram_file = os.path.join(tomogram_dir, file_name)
         download_https(f"{HARVARD_DATAVERSE_SERVER_URL}/api/access/datafile/{file_id}", tomogram_file)
+    else:
+        try:
+            tomogram = Run.find(client, [Run.id == run_id])[0].tomograms[0]
+            tomogram.download_mrcfile(dest_path=tomogram_dir)
+        except Exception as e:
+            file_name, file_id = get_harvard_file_name_and_id(dataset_id, run_id, file_type="tomogram")
+            if file_id is None:
+                print(f"Error: {e}")
+                print(f"Error: No tomogram file found for Dataset: {dataset_id} Run: {run_id}")
+                exit()
+
+            tomogram_file = os.path.join(tomogram_dir, file_name)
+            download_https(f"{HARVARD_DATAVERSE_SERVER_URL}/api/access/datafile/{file_id}", tomogram_file)
 
     # download the target mask from Harvard Dataverse
     print(f"--> Downloading target mask for Dataset: {dataset_id} Run: {run_id}")

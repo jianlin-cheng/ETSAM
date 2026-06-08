@@ -15,6 +15,11 @@ import inference
 
 MEMBRANE_OBJECT_ID = 1
 
+def softplus_minmax_normalize(array):
+    array = torch.nn.functional.softplus(torch.from_numpy(array)).cpu().numpy()
+    array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    return array
+
 def min_max_normalize(array):
     array = (array - np.min(array)) / (np.max(array) - np.min(array))
     return array
@@ -53,9 +58,9 @@ if __name__ == "__main__":
     parser.add_argument("--csv", help="CSV file containing the test dataset", default="data/testset.csv", type=str)
     parser.add_argument("--collection-dir", help="Collection directory containing the test dataset", default="data/collection", type=str)
     parser.add_argument("--output-dir", help="Output directory to store the results", default="results/etsam_testset_predictions", type=str)
-    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_predictions/results.csv", type=str)
+    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_predictions/etsam_testset_3d_metrics.csv", type=str)
     parser.add_argument("--stage1-prompt", help="Stage 1 prompt method", default="grid_zero", type=str)
-    parser.add_argument("--stage2-prompt", help="Stage 2 prompt method", default="zero", type=str)
+    parser.add_argument("--stage2-prompt", help="Stage 2 prompt method", default="etsam_stage1_partial", type=str)
     parser.add_argument("--stage2-logit-threshold", help="Stage 2 logit threshold", default=-0.25, type=float)
 
     args = parser.parse_args()
@@ -70,7 +75,7 @@ if __name__ == "__main__":
     config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
     stage1_prompt = args.stage1_prompt # "zero", "grid" or "grid_zero"
     stage2_prompt = args.stage2_prompt # "zero", "grid", "grid_zero" or "etsam_stage1_partial"
-    stage1_logit_threshold = 0.0 # threshold for converting predicted logits (likelihood scores) to binary mask
+    stage1_logit_threshold = -0.25 # threshold for converting predicted logits (likelihood scores) to binary mask
     stage2_logit_threshold = args.stage2_logit_threshold # threshold for converting predicted logits (likelihood scores) to binary mask
 
     results_df = pd.DataFrame()
@@ -91,7 +96,7 @@ if __name__ == "__main__":
             with mrcfile.open(input_tomogram_file_path) as mrc:
                 voxel_size = mrc.voxel_size
                 input_tomogram_shape = mrc.data.shape
-                tomogram_data = mrc.data.copy()
+                tomogram_data = mrc.data.copy().astype(np.float32)
             print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
             with mrcfile.open(gt_mask_file_path) as mrc:
@@ -105,7 +110,7 @@ if __name__ == "__main__":
                 continue
 
             # Normalize tomogram data
-            tomogram_data = min_max_postive_values_normalize(tomogram_data)
+            tomogram_data = softplus_minmax_normalize(tomogram_data)
             
             # STAGE 1 Prediction
             print(f"==> Running Stage 1 Prediction with Prompt Method: {stage1_prompt}")
