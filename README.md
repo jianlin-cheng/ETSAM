@@ -26,8 +26,6 @@ _(AMD GPUs may work, but might require [AMD specific pytorch](https://pytorch.or
 - Linux (Tested in Fedora 43 and Arch Linux)
 - Windows (may work, but Untested)
 
-
-
 # Installation
 
 Click [here](https://github.com/jianlin-cheng/ETSAM/archive/refs/heads/main.zip) to download the project and extract the **ETSAM-main.zip** into a preferred folder.
@@ -250,6 +248,27 @@ python evaluation/t-test.py
 ```
 python evaluation/pr_curve_auprc.py
 ```
+
+# Troubleshooting
+
+### Overriding the CUDA version
+
+PyTorch and the CUDA runtime are installed from `conda-forge`. By default the CUDA version is **decided at install time** — conda detects your installed NVIDIA driver and selects the newest compatible CUDA build automatically, so no manual configuration is needed in most cases.
+
+If you need to force a specific CUDA version (for example, to match an older driver), pin it in one of the following ways:
+
+**Override when creating the environment**:
+```
+CONDA_OVERRIDE_CUDA=12.4 conda env create -f environment.yml
+```
+
+**Or install into an existing `etsam` environment:**
+```
+conda install -n etsam -c conda-forge "cuda-version=12.4"
+```
+
+The available `cuda-version` values are those built by [conda-forge](https://anaconda.org/channels/conda-forge/packages/cuda-version/overview).
+
 
 # Cite
 ```
