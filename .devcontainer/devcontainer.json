@@ -1,0 +1,24 @@
+{
+  "name": "ETSAM",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace/etsam",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/etsam,type=bind",
+  "runArgs": ["--gpus", "all"],
+  "hostRequirements": {
+    "gpu": "optional"
+  },
+  "remoteUser": "ubuntu",
+  "updateRemoteUserUID": true,
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/miniforge/envs/etsam/bin/python"
+      },
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

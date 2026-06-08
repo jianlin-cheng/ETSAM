@@ -11,46 +11,99 @@ Cryogenic Electron Tomography (cryo-ET) is an emerging experimental technique to
 
 # Requirements
 ## Hardware Requirements
-ETSAM requires:
-- a GPU with atleast 2GB VRAM supported by [pytorch](https://pytorch.org/get-started/locally/), 4GB VRAM recommended.
-- atleast 16GB CPU RAM, recommended 32GB.
+<ins>ETSAM requires:</ins>
+- a NVIDIA GPU with atleast 2GB VRAM, 4GB VRAM recommended. 
+- atleast 24GB CPU RAM, recommended 32GB.
 
-Tested on
+_(AMD GPUs may work, but might require [AMD specific pytorch](https://pytorch.org/get-started/locally/) installation inside the etsam conda environment. Untested.)_
+
+<ins>Tested on</ins>
 - Intel® Core™ i7-14700K
 - NVIDIA GeForce RTX 4070 with 12GB VRAM
 - 32 GB DDR5 CPU RAM
 
 ## Operating System
-- Linux (Tested in Fedora 43)
-- Windows/macOS (should work, but Untested)
+- Linux (Tested in Fedora 43 and Arch Linux)
+- Windows (may work, but Untested)
 
-## Software Requirements
-- `conda` (preferably installed through [Miniforge](https://conda-forge.org/download/)). Used to install python and required python package dependencies. 
-    - Tested with conda version 25.11.0.
-- Compute stack such as Nvidia CUDA/AMD ROCm/etc as needed to run [pytorch](https://pytorch.org/get-started/locally/) on the GPU.
-    - Tested with NVIDIA CUDA 13.0 and Driver version 580.119.02.
+
 
 # Installation
 
-### Clone the project
+Click [here](https://github.com/jianlin-cheng/ETSAM/archive/refs/heads/main.zip) to download the project and extract the **ETSAM-main.zip** into a preferred folder.
+
+OR run from terminal
 ```
 git clone https://github.com/jianlin-cheng/ETSAM
 cd ETSAM
 ```
 
-### Download ETSAM Stage 1 and Stage 2 weights
+## 1. Installation using Terminal
+
+#### Software Requirements
+- `conda` (preferably installed through [Miniforge](https://conda-forge.org/download/)). It is used to install python and required python package dependencies. 
+    - Tested with conda version 25.11.0.
+- Compute stack such as Nvidia CUDA/AMD ROCm/etc as needed to run pytorch on the GPU.
+    - Tested with NVIDIA CUDA 13.0 and Driver version 580.119.02.
+
+#### Download ETSAM Stage 1 and Stage 2 weights
 ```
 wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage1_v1.pt
 wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage2_v1.pt
 ```
 
-### Setup Conda Environment
+#### Setup Conda Environment
 ```
 conda env create -f environment.yml
 conda activate etsam
 ```
 
 Typically takes around 5-10mins to install ETSAM. Installation time may vary based on your internet speed.
+
+## 2. Installation using Dev Containers
+
+Alternate method to install and use etsam. It is a reproducible way to run ETSAM with the included [Dev Container](https://containers.dev/) json file. It
+builds the conda environment into the docker image and downloads the model weights for you, so no manual environment setup or weight download is needed. This makes the environment consistent across different systems.
+
+#### Software Requirements: 
+[Docker](https://docs.docker.com/get-docker/) with the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+for NVIDIA GPU access, and either VS Code with the
+[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+or the [`devcontainer` CLI](https://github.com/devcontainers/cli).
+
+#### Data Location Recommendation:
+When using Devcontainers, place your input tomogram data into the **data/** directory and store the output segmentations in **results/** as these directories are shared between the host and container.
+
+
+#### 1. VS Code
+
+- Open the ETSAM folder and choose **Reopen in Container** (command palette → *Dev Containers: Reopen in
+Container*). 
+    - The first time it takes time to download container image, install conda environment and download checkpoints. 
+Subsequent devcontainer opens will be instant. 
+- The vscode editor and its integrated terminal then run **inside** 
+the container, giving you access to everything needed to run etsam. 
+- Run `nvidia-smi` in vscode terminal to check if nvidia gpu is accessible inside the container. 
+
+Skip to **Usage** section to learn how to use etsam.
+
+#### 2. Devcontainer CLI
+
+Start (and on first run, build) the container:
+
+```
+devcontainer up
+```
+
+`devcontainer up` only starts the container — it does not give you a shell. Open one inside it with:
+
+```
+devcontainer exec bash
+```
+
+You are now inside the container and everything including the data/ folder is available. Follow the usage section below on how to run etsam.
+
 # Usage
 ## Run ETSAM on a sample cryo-ET tomogram:
 ```
