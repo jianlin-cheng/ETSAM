@@ -1,0 +1,78 @@
+# Paper-segmentation MEF thickness — mirrors the repo DEFAULT config.yml verbatim,
+# changing ONLY paths (seg_dir/tomo_dir/work_dir/exp_name) and cores.
+# Default surface_generation: isotropic_remesh + octree_depth 9 + rh9.
+
+# UNIVERSAL
+seg_dir: "/home/joel/bml_drive/surface_morphometrics/data/empiar_13056/mef/segmentations_mito_er/"
+tomo_dir: "/home/joel/bml_drive/surface_morphometrics/data/empiar_13056/mef/tomograms/"
+work_dir: "/home/joel/bml_drive/surface_morphometrics/results/mef_newpipe_default/"
+exp_name: "mef_newpipe_default"
+segmentation_values:
+  OMM: 1
+  IMM: 2
+  ER: 3
+cores: 6
+
+#SEGMENTATION TO MESH
+surface_generation:
+  angstroms: false
+  ultrafine: false
+  extrapolation_distance: 1.5
+  isotropic_remesh: true
+  target_area: 1.0
+  simplify: false
+  simplify_max_triangles: 300000
+  octree_depth: 9
+  point_weight: 0.7
+  neighbor_count: 400
+  smoothing_iterations: 1
+
+# PYCURV
+curvature_measurements:
+  radius_hit: 9
+  min_component: 30
+  exclude_borders: 1
+distance_and_orientation_measurements:
+  mindist: 3
+  maxdist: 400
+  tolerance: 0.1
+  verticality: true
+  intra:
+    - OMM
+    - IMM
+    - ER
+  relative_orientation: true
+  inter:
+    OMM:
+      - IMM
+      - ER
+
+# DENSITY SAMPLING (used by sample_density.py)
+density_sampling:
+  sample_spacing: 0.25
+  scan_range: 10
+
+# THICKNESS MEASUREMENTS (used by measure_thickness.py)
+thickness_measurements:
+  average_radius: 12
+  fit_curve: true
+  components:
+    - OMM
+    - IMM
+    - ER
+
+# MESH REFINEMENT (used by refine_mesh.py) — not run for thickness-only reproduction
+mesh_refinement:
+  iterations: 5
+  damping_factor: 1.0
+  monolayer: false
+  use_xcorr: true
+  average_radius: 20
+  average_radius_decay: 0.9
+  average_radius_min: 12.0
+  max_total_offset: 4
+  smooth_offsets: true
+  offset_smoothing_radius: 12
+  laplacian_iterations: 1
+  laplacian_lambda: 0.3
+  lowpass_sigma: 2
