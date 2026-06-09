@@ -22,24 +22,6 @@ def min_max_postive_values_normalize(array):
     return array
 
 
-def normalize_95_percentile(array):
-    array = (array - np.min(array)) / (np.max(array) - np.min(array))
-    array = array / np.percentile(array, 95)
-    return array
-
-
-def min_max_postive_values_normalize_95_percentile(array):
-    array[array < 0] = 0
-    array = array / np.percentile(array, 95)
-    return array
-
-
-def elu_minmax_normalize(array):
-    array = torch.nn.functional.elu(torch.from_numpy(array)).cpu().numpy()
-    array = (array - np.min(array)) / (np.max(array) - np.min(array))
-    return array
-
-
 def softplus_minmax_normalize(array):
     array = torch.nn.functional.softplus(torch.from_numpy(array)).cpu().numpy()
     array = (array - np.min(array)) / (np.max(array) - np.min(array))
@@ -175,6 +157,14 @@ if __name__ == "__main__":
         choices=["zero", "grid", "grid_zero", "etsam_stage1_partial"],
     )
 
+    parser.add_argument(
+        "--normalize-method",
+        help="method for normalizing the tomogram data",
+        type=str,
+        default="softplus_minmax",
+        choices=["min_max_positive_values", "softplus_minmax"],
+    )
+
     args = parser.parse_args()
     stage1_ckpt_path = "checkpoints/etsam_stage1_v1.pt"
     stage2_ckpt_path = "checkpoints/etsam_stage2_v1.pt"
@@ -188,6 +178,7 @@ if __name__ == "__main__":
     grid_interval = 10 if split_processing else 50
     input_tomogram_file_path = os.path.abspath(args.input_tomogram_file_path)
     output_dir = os.path.abspath(args.output_dir)
+    normalize_method = args.normalize_method
 
     try:
         print("==> Reading input tomogram:", input_tomogram_file_path)
@@ -198,7 +189,10 @@ if __name__ == "__main__":
         print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
         print(f"==> Normalizing tomogram data")
-        normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
+        if normalize_method == "min_max_positive_values":
+            normalized_tomogram_data = min_max_postive_values_normalize(tomogram_data)
+        elif normalize_method == "softplus_minmax":
+            normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
 
         if split_processing:
             output_mask_file_path = os.path.join(
