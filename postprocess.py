@@ -6,7 +6,7 @@ Post-process 3D binary segmentation masks with selectable steps:
 
 1. ``--postprocess-remove-parallel-membrane-misconnections`` — sever small 2D
    misconnections between parallel membranes per Z-slice.
-2. ``--postprocess-remove-small-noise`` — remove thin 3D blobs that do not span
+2. ``--postprocess-remove-thin-noise`` — remove thin 3D blobs that do not span
    enough slices along Z.
 
 With ``--post-process`` or no method flags (standalone ``postprocess.py``), all steps run.
@@ -15,7 +15,7 @@ With one or more method flags, only the selected steps run.
 Example
 -------
     python postprocess.py mask_in.mrc mask_out.mrc
-    python postprocess.py mask_in.mrc mask_out.mrc --postprocess-remove-small-noise
+    python postprocess.py mask_in.mrc mask_out.mrc --postprocess-remove-thin-noise
     python postprocess.py mask_in.mrc mask_out.mrc --postprocess-remove-parallel-membrane-misconnections --post-process-max-bridge-len 8
 """
 
@@ -50,7 +50,7 @@ def add_postprocess_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
     )
     parser.add_argument(
-        "--postprocess-remove-small-noise",
+        "--postprocess-remove-thin-noise",
         help="remove thin 3D blobs that do not span enough Z slices",
         action="store_true",
     )
@@ -83,7 +83,7 @@ def postprocess_requested(args: argparse.Namespace) -> bool:
     """Return whether any postprocessing was requested on the CLI."""
     return bool(
         getattr(args, "post_process", False)
-        or getattr(args, "postprocess_remove_small_noise", False)
+        or getattr(args, "postprocess_remove_thin_noise", False)
         or getattr(args, "postprocess_remove_parallel_membrane_misconnections", False)
     )
 
@@ -114,7 +114,7 @@ def postprocess_cli(
     """
     remove_small_noise, remove_parallel = _resolve_postprocess_steps(
         post_process_all=getattr(args, "post_process", False),
-        remove_small_noise=getattr(args, "postprocess_remove_small_noise", False),
+        remove_small_noise=getattr(args, "postprocess_remove_thin_noise", False),
         remove_parallel_membrane_misconnections=getattr(
             args, "postprocess_remove_parallel_membrane_misconnections", False
         ),
@@ -124,7 +124,7 @@ def postprocess_cli(
         if default_all:
             raise ValueError(
                 "No postprocessing steps selected. Omit method flags to run all steps, "
-                "or pass --postprocess-remove-small-noise and/or "
+                "or pass --postprocess-remove-thin-noise and/or "
                 "--postprocess-remove-parallel-membrane-misconnections."
             )
         return mask

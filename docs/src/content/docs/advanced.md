@@ -139,7 +139,7 @@ This step identifies 3D connected components in the mask and removes blobs that 
 
 ```bash
 python postprocess.py mask_in.mrc mask_out.mrc \
-    --postprocess-remove-small-noise \
+    --postprocess-remove-thin-noise \
     --post-process-min-slices 5
 ```
 
@@ -169,4 +169,4 @@ python postprocess.py mask_in.mrc mask_out.mrc \
 
 ### Run post-processing integrated with etsam
 
-Post-processing can also be applied in an integrated manner directly from `etsam.py` using the same flags from postprocess.py as discussed above. For example: `python etsam.py input.mrc --post-process --output-dir results/` will run all post-processing steps. or `python etsam.py input.mrc --postprocess-remove-small-noise --output-dir results/` to only remove small and thin noise blobs.
+Post-processing can also be applied in an integrated manner directly from `etsam.py` using the same flags from postprocess.py as discussed above. For example: `python etsam.py input.mrc --post-process --output-dir results/` will run all post-processing steps. or `python etsam.py input.mrc --postprocess-remove-thin-noise --output-dir results/` to only remove small and thin noise blobs.
