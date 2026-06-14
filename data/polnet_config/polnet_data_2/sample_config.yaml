@@ -1,0 +1,40 @@
+helix_list: null
+mb_proteins_list:
+- in_10A/mb_5wek_10A.pms
+- in_10A/mb_4pe5_10A.pms
+- in_10A/mb_5gjv_10A.pms
+- in_10A/mb_5kxi_10A.pms
+- in_10A/mb_5tqq_10A.pms
+- in_10A/mb_5vai_10A.pms
+membranes_list:
+- in_mbs/sphere.mbs
+- in_mbs/ellipse.mbs
+- in_mbs/toroid.mbs
+mmer_tries: 20
+multi_process: true
+nb_tomos_per_process_max: 1
+ntomos: 18
+out_dir: polnet_data_2
+pmer_tries: 100
+proteins_list:
+- in_10A/3j9i_10A.pns
+- in_10A/4v4r_50S_10A.pns
+- in_10A/6utj_10A.pns
+- in_10A/4v7r_10A.pns
+- in_10A/2uv8_10A.pns
+- in_10A/4cr2_10A.pns
+- in_10A/3qm1_10A.pns
+- in_10A/3h84_10A.pns
+- in_10A/3d2f_10A.pns
+- in_10A/2cg9_10A.pns
+- in_10A/1u6g_10A.pns
+- in_10A/1bxn_10A.pns
+root_path: data
+step: sample
+surf_dec: 0.9
+verbose: true
+voi_shape:
+- 500
+- 500
+- 250
+voi_vsize: 10

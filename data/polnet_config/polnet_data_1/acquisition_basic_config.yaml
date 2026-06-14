@@ -1,0 +1,19 @@
+acquisition_name: basic
+detector_snr:
+- 1
+- 2
+malign_mn: 1
+malign_mx: 1.5
+malign_sg: 0.2
+multi_process: true
+ntomos: 5
+out_dir: polnet_data_1
+root_path: data
+step: acquisition
+surf_dec: 0.9
+tilt_angs:
+- -60
+- 61
+- 3
+verbose: true
+voi_vsize: 10

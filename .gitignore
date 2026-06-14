@@ -182,6 +182,10 @@ dmypy.json
 # My custom ignore files
 experiments/
 data/**/
+!data/
+!data/polnet_config/
+!data/polnet_config/**/
+!data/polnet_config/**
 logs/
 lightning_logs/
 .env
