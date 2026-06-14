@@ -16,7 +16,7 @@ membranes_list:
 mmer_tries: 20
 multi_process: true
 nb_tomos_per_process_max: 1
-ntomos: 5
+ntomos: 10
 out_dir: polnet_data_1
 pmer_tries: 100
 proteins_list:

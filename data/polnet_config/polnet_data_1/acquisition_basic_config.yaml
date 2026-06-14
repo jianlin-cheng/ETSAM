@@ -6,7 +6,7 @@ malign_mn: 1
 malign_mx: 1.5
 malign_sg: 0.2
 multi_process: true
-ntomos: 5
+ntomos: 10
 out_dir: polnet_data_1
 root_path: data
 step: acquisition
