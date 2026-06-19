@@ -151,9 +151,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--stage2-prompt",
-        help="prompt for stage 2 (zero, grid or etsam_stage1_partial)",
+        help="prompt for stage 2 (zero, grid, grid_zero or etsam_stage1_partial)",
         type=str,
-        default="etsam_stage1_partial",
+        default="zero",
         choices=["zero", "grid", "grid_zero", "etsam_stage1_partial"],
     )
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         "--normalize-method",
         help="method for normalizing the tomogram data",
         type=str,
-        default="softplus_minmax",
+        default="min_max_positive_values",
         choices=["min_max_positive_values", "softplus_minmax"],
     )
 
@@ -188,7 +188,7 @@ if __name__ == "__main__":
             tomogram_data = mrc.data.astype(np.float32)
         print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
-        print(f"==> Normalizing tomogram data")
+        print(f"==> Normalizing tomogram data with {normalize_method} method")
         if normalize_method == "min_max_positive_values":
             normalized_tomogram_data = min_max_postive_values_normalize(tomogram_data)
         elif normalize_method == "softplus_minmax":
