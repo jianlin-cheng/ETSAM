@@ -9,7 +9,7 @@
 #     <DATA_ROOT>/segmentations_other/    {tomo}_otherOrg.labels.mrc     (vesicle oracle)
 #
 # Produces:
-#     <DATA_ROOT>/etsam_phase2/etsam_masks/            {tomo}_etsam_predicted_post_processed_mask.mrc
+#     <DATA_ROOT>/etsam_phase2/etsam_masks/            {tomo}_etsam_predicted_mask.mrc
 #     <DATA_ROOT>/etsam_phase2/etsam_multilabel_full/  {tomo}_etsam_to_{tag}.labels.mrc  (OMM=1,IMM=2,ER=3)
 #                                                      {tomo}_etsam_to_Vesicle.labels.mrc (Vesicle=4; optional)
 #
@@ -53,7 +53,7 @@ echo "  vesicles  : $([ "$GEN_VESICLE" = 1 ] && echo yes || echo skipped)"
 echo "============================================================"
 
 mask_for() {  # mask path for a given tomogram basename
-    echo "$MASK_DIR/${1}_etsam_predicted_post_processed_mask.mrc"
+    echo "$MASK_DIR/${1}_etsam_predicted_mask.mrc"
 }
 
 # ---- 1. ETSAM binary masks (one GPU job at a time) ----
@@ -65,10 +65,10 @@ for tomo_mrc in "$TOMO_DIR"/*.mrc; do
     if [ -s "$mask" ]; then echo "  SKIP (mask exists): $tomo"; continue; fi
     echo "  ETSAM: $tomo"
     ( cd "$ETSAM_REPO" && "$ETSAM_PY" etsam.py "$tomo_mrc" \
-        --output-dir "$MASK_DIR" --post-process --post-process-min-slices 10 ) \
+        --output-dir "$MASK_DIR" ) \
         2>&1 | tee "$MASK_DIR/${tomo}_etsam.log"
 done
-echo "      masks present: $(ls "$MASK_DIR"/*_post_processed_mask.mrc 2>/dev/null | wc -l)"
+echo "      masks present: $(ls "$MASK_DIR"/*_predicted_mask.mrc 2>/dev/null | wc -l)"
 
 # ---- 2. Mito multi-label (OMM/IMM/ER) — one per *_Mito*_ER oracle ----
 # Discover {tomo, tag} from each mito segmentation filename:

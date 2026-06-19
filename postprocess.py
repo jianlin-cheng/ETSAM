@@ -5,7 +5,7 @@ postprocess.py
 Post-process 3D binary segmentation masks with selectable steps:
 
 1. ``--postprocess-remove-parallel-membrane-misconnections`` — sever small 2D
-   misconnections between parallel membranes per Z-slice.
+   misconnections between parallel membranes.
 2. ``--postprocess-remove-thin-noise`` — remove thin 3D blobs that do not span
    enough slices along Z.
 
