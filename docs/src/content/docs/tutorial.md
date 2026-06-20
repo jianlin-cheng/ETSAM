@@ -51,12 +51,20 @@ python etsam.py <input_tomogram> --output-dir <output_directory>
 | --- | --- | --- |
 | `input_tomogram` | Yes | Path to the input tomogram file in `.mrc` format. |
 | `--output-dir` | No | Directory where predicted membrane masks are saved. Default: current directory. |
-| `--post-process` | No | Run post-processing to clean up artifacts. |
-| `--logit-threshold` | No | Logit threshold for binarizing the mask. Default: `-0.25`. |
-| `--store-logits` | No | Save raw logit scores as an additional `.mrc` file. |
-| `--split-processing` | No | Split the tomogram into quadrants and segment each independently; useful for complex tomograms with closely apposed membranes. |
+| `--logit-threshold` | No | Logit threshold for binarizing the Stage 2 logits into the final mask. Default: `-0.25`. |
+| `--store-logits` | No | Save raw Stage 2 logit scores as an additional `.mrc` file. |
+| `--normalize-method` | No | Input normalization method: `min_max_positive_values` (default) or `softplus_minmax`. |
+| `--stage1-prompt` | No | Stage 1 prompt method: `zero`, `grid`, or `grid_zero` (default). |
+| `--stage2-prompt` | No | Stage 2 prompt method: `zero` (default), `grid`, `grid_zero`, or `etsam_stage1_partial`. |
+| `--split-processing` | No | Split the tomogram into four Y/X quadrants and segment each independently; useful for complex tomograms with closely apposed membranes. |
+| `--post-process` | No | Run all post-processing steps after inference. |
+| `--postprocess-remove-thin-noise` | No | Select the thin 3D noise removal post-processing step. |
+| `--postprocess-remove-parallel-membrane-misconnections` | No | Select the parallel membrane misconnection removal post-processing step. |
+| `--post-process-min-slices` | No | Minimum Z-slice span for keeping connected components during thin-noise removal. Default: `10`. |
+| `--post-process-max-bridge-len` | No | Maximum skeleton bridge length removed during parallel membrane misconnection cleanup. Default: `5`. |
+| `--post-process-max-spur-len` | No | Optional dead-end spur length to prune during misconnection cleanup. Default: `0`. |
 
-The default run produces a single binary mask. These flags — along with prompt selection, normalization, and fine-grained post-processing via `postprocess.py` — are covered in detail in [Advanced Usage](/ETSAM/advanced/).
+The default run produces a single binary mask. These flags — including threshold selection, prompt selection, normalization, split-processing, saved logits, and fine-grained post-processing — are covered in detail in [Advanced Usage](/ETSAM/advanced/).
 
 ## Example 1: Prokaryotic Cell
 

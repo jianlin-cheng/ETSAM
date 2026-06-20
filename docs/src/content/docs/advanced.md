@@ -61,25 +61,25 @@ Before inference, ETSAM normalizes the input tomogram. The `--normalize-method` 
 
 ```bash
 python etsam.py input.mrc \
-    --normalize-method min_max_positive_values \
+    --normalize-method softplus_minmax \
     --output-dir results/
 ```
 
 | Method | Description |
 | --- | --- |
-| `softplus_minmax` (default) | Applies a softplus transform followed by min-max scaling. Robust general-purpose default. |
-| `min_max_positive_values` | Clips negative values to zero, then scales by the maximum. May improve membrane detection on certain tomograms. |
+| `min_max_positive_values` (default) | Clips negative values to zero, then scales by the maximum. General-purpose starting point for ETSAM inference. |
+| `softplus_minmax` | Applies a softplus transform followed by min-max scaling. May improve membrane detection on certain tomograms. |
 
-If membranes are missed with the default softplus normalization, switching to `min_max_positive_values` is worth trying.
+If membranes are missed/improperly detected with the default `min_max_positive_values` normalization, switching to `softplus_minmax` is worth trying.
 
 ## Prompt Methods
 
 ETSAM is a two-stage model, and each stage uses an automatic prompting strategy that seeds the membrane prediction. The available prompt methods are:
 
-- **`grid_zero`** — seeds only the first slice with a grid of points. Sufficient in most cases.
-- **`grid`** — seeds the first and every 50th slice with a grid of points. Can recover membranes that `zero` or `grid_zero` miss.
-- **`zero`** — uses an empty prompt, letting the model automatically detect membranes without any input.
-- **`etsam_stage1_partial`** — reuses the Stage 1 mask to seed the model at the first and every 50th slice. Only available for Stage 2.
+- **`grid_zero`** — seeds only the first slice with a grid of points. This is the default for Stage 1.
+- **`grid`** — seeds the first slice and then regularly spaced slices with a grid of points. Can recover membranes that `zero` or `grid_zero` miss.
+- **`zero`** — uses an empty prompt, letting the model automatically detect membranes without any input. This is the default for Stage 2.
+- **`etsam_stage1_partial`** — reuses the Stage 1 mask to seed the model at the first slice and then regularly spaced slices. Only available for Stage 2.
 
 They can be overridden and experimented with in the following way:
 
@@ -93,7 +93,7 @@ python etsam.py input.mrc \
 | Flag | Default | Choices |
 | --- | --- | --- |
 | `--stage1-prompt` | `grid_zero` | `zero`, `grid`, `grid_zero` |
-| `--stage2-prompt` | `etsam_stage1_partial` | `zero`, `grid`, `grid_zero`, `etsam_stage1_partial` |
+| `--stage2-prompt` | `zero` | `zero`, `grid`, `grid_zero`, `etsam_stage1_partial` |
 
 ## Split Processing
 

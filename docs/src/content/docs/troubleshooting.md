@@ -14,7 +14,7 @@ Common issues encountered when installing or running ETSAM, and how to resolve t
 If ETSAM produces an empty mask or misses parts of the membranes, several options are worth trying before giving up on a tomogram:
 
 - **Use a grid prompt for Stage 1.** Seeding Stage 1 with a grid of points every 50th slice can help in better detection of membranes: `python etsam.py input.mrc --stage1-prompt grid --output-dir results/`. This is not recommended unless you have issues with default prompt method, as it can introduce more noise into prediction.
-- **Try `min_max_positive_values` normalization.** Switching from the default softplus normalization method to `--normalize-method min_max_positive_values` can improve membrane contrast on some tomograms.
+- **Try `softplus_minmax` normalization.** Switching from the default `min_max_positive_values` normalization method to `--normalize-method softplus_minmax` can improve membrane contrast on some tomograms.
 - **Use `--split-processing`.** Splitting the tomogram into quadrants and segmenting each with a denser prompt grid improves detection in complex tomograms, especially where membranes are closely apposed.
 - **Denoise the tomogram.** can help in better detection of membranes.
 - **Lower the threshold by inspecting the logits.** Run etsam `--store-logits`, open the resulting logit volume in UCSF ChimeraX or other visualization software, and check whether a lower threshold would capture the missing membrane signal.
