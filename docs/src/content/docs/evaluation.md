@@ -9,7 +9,7 @@ next:
   link: /ETSAM/citation/
 ---
 
-The ETSAM test set contains 20 tomograms: 10 simulated PolNet tomograms and 10 experimental CryoET Data Portal tomograms with ground-truth membrane annotations. The steps below reproduce the benchmark metrics reported in the paper.
+The ETSAM test set contains 17 experimental tomograms with ground-truth membrane annotations. The steps below reproduce the evaluation reported in the paper.
 
 ## Evaluate on the Test Dataset
 
@@ -31,9 +31,29 @@ This runs ETSAM inference on all test tomograms and computes Dice, IoU, Precisio
 python evaluation/evaluate_etsam.py
 ```
 
-Results are saved to `results/etsam_testset_predictions/results.csv`.
+Results are saved to `results/etsam_testset_predictions/3d_metrics.csv`.
 
-### 3. Statistical Significance
+### 3. Plane-Wise Evaluation
+
+This evaluates ETSAM prediction consistency by averaging per-slice Dice, IoU, Precision, and Recall separately across the XY, XZ, and YZ planes.
+
+```bash
+python evaluation/evaluate_etsam_plane_wise.py
+```
+
+Results are saved to `results/etsam_testset_predictions/etsam_testset_plane_wise_metrics.csv`.
+
+### 4. Theta-Wise Evaluation
+
+This evaluates ETSAM prediction consistency across membrane orientations by binning membrane voxels by surface-normal angle and computing Dice, IoU, Precision, and Recall for each theta bin.
+
+```bash
+python evaluation/evaluate_etsam_theta_wise.py
+```
+
+Results are saved to `results/etsam_testset_predictions/etsam_testset_theta_wise_metrics.csv`.
+
+### 5. Statistical Significance
 
 Run paired t-tests comparing ETSAM against TARDIS and MemBrain-Seg:
 
@@ -45,7 +65,7 @@ python evaluation/t-test.py
 TARDIS and MemBrain-Seg were evaluated previously, and their results are stored in the `results/` directory for comparison.
 :::
 
-### 4. Precision-Recall Curves and AUPRC
+### 6. Precision-Recall Curves and AUPRC
 
 Compute the Area Under the Precision-Recall Curve (AUPRC) and generate PR curve plots:
 
@@ -57,21 +77,18 @@ python evaluation/pr_curve_auprc.py
 
 ETSAM is benchmarked with standard segmentation metrics computed against ground-truth binary membrane annotations.
 
-| Metric | Formula | Interpretation |
-| --- | --- | --- |
-| Dice | `2 * TP / (2 * TP + FP + FN)` | Harmonic mean of precision and recall; overall segmentation quality. |
-| IoU | `TP / (TP + FP + FN)` | Intersection over union; stricter than Dice. |
-| Precision | `TP / (TP + FP)` | Fraction of predicted membrane pixels that are correct. |
-| Recall | `TP / (TP + FN)` | Fraction of true membrane pixels that are detected. |
+| Metric | Interpretation |
+| --- | --- |
+| Dice | Harmonic mean of precision and recall; overall segmentation quality. |
+| IoU | Measures how much the predicted membrane region overlaps the ground truth relative to their combined area |
+| Precision | Fraction of predicted membrane pixels that are correct. |
+| Recall | Fraction of true membrane pixels that are detected. |
 
-The AUPRC, or Area Under the Precision-Recall Curve, provides a threshold-independent assessment of model discrimination. It is especially useful for membrane segmentation because membrane pixels are sparse relative to background.
+The AUPRC, or Area Under the Precision-Recall Curve, provides a threshold-independent assessment of model discrimination.
 
 ## Baseline Comparison
 
-ETSAM was compared against two leading cryo-ET membrane segmentation methods:
-
-- TARDIS: a distance-based instance segmentation approach designed for cryo-ET.
-- MemBrain-Seg: a 3D U-Net based membrane segmentation model for cryo-ET.
+ETSAM was compared against two leading cryo-ET membrane segmentation methods TARDIS and MemBrain-Seg.
 
 ETSAM achieves a more favorable precision-recall trade-off than both baselines on the independent test set, demonstrating robust membrane detection across simulated and experimental tomograms.
 

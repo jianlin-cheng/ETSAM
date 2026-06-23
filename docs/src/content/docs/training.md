@@ -13,7 +13,7 @@ ETSAM's training code is based on the SAM2 training framework with a modified da
 
 Training is a sequential two-stage process:
 
-1. Stage 1 is trained on raw tomogram slices and learns to predict membrane locations from grid-point prompts.
+1. Stage 1 is trained on raw tomogram slices and learns to predict membrane locations from grid-point prompts at first slice.
 2. Stage 2 is trained on fused inputs combining raw tomogram slices with Stage 1 predictions, learning to refine the initial output.
 
 :::note
@@ -26,7 +26,10 @@ Both stages start from the SAM2.1 Hiera Base Plus checkpoint, `sam2.1_hiera_base
 - The examples below assume a 4-GPU training setup.
 - Install the development dependencies before training:
 
+Follow installation instruction for the initial conda environment setup.
+
 ```bash
+conda activate etsam
 pip install -e ".[dev]"
 ```
 
@@ -150,8 +153,4 @@ Trained Stage 2 checkpoints are saved under `etsam_logs/etsam_stage2_training/ch
 
 ## Using Your Own Checkpoint
 
-After training, run inference with custom checkpoints by pointing ETSAM to the new weight files. The checkpoints follow the PyTorch Lightning format.
-
-:::tip
-The `last.ckpt` file saved at the end of training contains the final model weights. Earlier checkpoints can be used for checkpoint selection based on validation performance.
-:::
+After training, run inference with custom checkpoints by pointing ETSAM to the new stage 1 and stage 2 weight files. The checkpoints follow the PyTorch Lightning format.

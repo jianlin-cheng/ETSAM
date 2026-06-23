@@ -3,7 +3,7 @@ import mdx from '@astrojs/mdx';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-  site: 'https://joelselvaraj.github.io',
+  site: 'https://jianlin-cheng.github.io',
   base: '/ETSAM',
   integrations: [
     starlight({

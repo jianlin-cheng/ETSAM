@@ -58,9 +58,9 @@ if __name__ == "__main__":
     parser.add_argument("--csv", help="CSV file containing the test dataset", default="data/testset.csv", type=str)
     parser.add_argument("--collection-dir", help="Collection directory containing the test dataset", default="data/collection", type=str)
     parser.add_argument("--output-dir", help="Output directory to store the results", default="results/etsam_testset_predictions", type=str)
-    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_predictions/etsam_testset_3d_metrics.csv", type=str)
+    parser.add_argument("--results", help="CSV file to store the results", default="results/etsam_testset_predictions/3d_metrics.csv", type=str)
     parser.add_argument("--stage1-prompt", help="Stage 1 prompt method", default="grid_zero", type=str)
-    parser.add_argument("--stage2-prompt", help="Stage 2 prompt method", default="etsam_stage1_partial", type=str)
+    parser.add_argument("--stage2-prompt", help="Stage 2 prompt method", default="zero", type=str)
     parser.add_argument("--stage2-logit-threshold", help="Stage 2 logit threshold", default=-0.25, type=float)
 
     args = parser.parse_args()

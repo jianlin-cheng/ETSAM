@@ -29,8 +29,16 @@ _(AMD GPUs may work, but might require [AMD specific pytorch](https://pytorch.or
 - Linux (Tested in Fedora 43 and Arch Linux)
 - Windows (may work, but Untested)
 
-# Documentation
-Visit https://jianlin-cheng.github.io/ETSAM/ for installation and tutorial guide on how to use ETSAM. There are also detailed explanation on advanced usage and troubleshooting details available in the documentation.
+# Installation 
+Detailed instructions to install ETSAM is available in https://jianlin-cheng.github.io/ETSAM/installation.
+
+# Usage
+We have provided detailed tutorial on how to use ETSAM in https://jianlin-cheng.github.io/ETSAM/tutorial/. 
+
+Information on advanced usage of ETSAM is available here: https://jianlin-cheng.github.io/ETSAM/advanced/
+
+# Training and Evaluation
+Refer [Training](https://jianlin-cheng.github.io/ETSAM/training) and [Evaluation](https://jianlin-cheng.github.io/ETSAM/evaluation) section of the documentation for more details.
 
 # Cite
 ```
