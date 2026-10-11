@@ -5,20 +5,22 @@ prev:
   label: Installation
   link: /ETSAM/installation/
 next:
-  label: Advanced Usage
-  link: /ETSAM/advanced/
+  label: napari Plugin
+  link: /ETSAM/napari/
 ---
 
 This guide walks you through a complete run, from organizing your data to inspecting the predicted masks and handing them off to downstream analysis tools.
 
-ETSAM is a two-stage, SAM2-based model that produces fully automatic membrane segmentations. It accepts a standard `.mrc` tomogram and outputs a `.mrc` binary membrane mask: every voxel is labeled as either membrane (=1) or background (=0). No manual prompting or per-tomogram training is required.
+ETSAM is a two-stage, SAM2-based model that produces fully automatic membrane segmentations. It accepts a standard `.mrc` tomogram and outputs a `.mrc` binary membrane mask: every voxel is labeled as either membrane (=1) or background (=0). _No manual prompting or per-tomogram training is required_.
+
+This guide uses the `etsam` CLI command (see [Installation](/ETSAM/installation/)). To segment tomograms using GUI software, follow the [Napari plugin](/ETSAM/napari/) or [UCSF ChimeraX plugin](/ETSAM/chimerax) guide instead.
 
 ## Workflow
 
 A typical ETSAM run follows three steps:
 
 1. **Organize your data** — place your `.mrc` tomogram in a folder ETSAM can read. Ideally under `data/` folder.
-2. **Run segmentation** — invoke `etsam.py`, which runs Stage 1 and Stage 2 inference and saves the final mask.
+2. **Run segmentation** — run the `etsam` command, which runs Stage 1 and Stage 2 inference and saves the final mask.
 3. **(Optional) Post-process and analyze** — clean up artifacts and pass the mask to a downstream tool such as Surface Morphometrics or MemBrain-pick.
 
 For per-tomogram tuning of thresholds and post-processing, see [Advanced Usage](/ETSAM/advanced/).
@@ -26,51 +28,82 @@ For per-tomogram tuning of thresholds and post-processing, see [Advanced Usage](
 ## Preparations
 
 ETSAM needs a single input: a tomogram in `.mrc` format.
+For this tutorial, create a `demo` folder:
 
-We recommend keeping inputs and outputs in dedicated folders so that runs stay reproducible. A common layout is:
+```bash
+mkdir demo
+cd demo
+```
+
+We will download the tomograms into `data/` and write the results to `results/` inside it:
 
 ```text
-ETSAM/
+demo/
 |-- data/        # input tomograms (.mrc)
 |-- results/     # predicted masks, one subfolder per run
 ```
 
-Place your tomogram in `data/` (or any path you prefer), and ETSAM will write masks to the directory you pass via `--output-dir`.
-
 :::tip
-Denoised tomograms are not required, but may yield better masks.
+Denoised tomograms are not required, but may yield better membrane segmentation.
 :::
 
-## Basic Command
+## CLI Usage
 
-```bash
-python etsam.py <input_tomogram> --output-dir <output_directory>
+:::tip[Prefer a graphical interface?]
+The [napari plugin](/ETSAM/napari/) runs ETSAM inside the napari viewer, with no command line needed. The [ChimeraX plugin](/ETSAM/chimerax/) does the same in UCSF ChimeraX.
+:::
+
+ETSAM segments one tomogram per run. Run `etsam --help` to see all options:
+
+```text
+$ etsam --help
+usage: etsam [options] TOMOGRAM
+
+Segment cell membranes in a cryo-ET tomogram (.mrc) with ETSAM.
+
+positional arguments:
+  TOMOGRAM              input tomogram (.mrc)
+
+options:
+  -h, --help            show this help message and exit
+  -V, --version         show the version and exit
+
+output:
+  --output-dir DIR      folder for the results (default: current folder)
+  --logit-threshold T   logit threshold for the mask (default: -0.25)
+  --store-logits        also save the logits (membrane scores)
+
+segmentation:
+  --split-processing    segment the 4 Y/X quadrants separately
+  --normalize-method M  min_max_positive_values (default), softplus_minmax
+  --stage1-prompt P     zero, grid, grid_zero (default)
+  --stage2-prompt P     zero (default), grid, grid_zero, etsam_stage1_partial
+
+post-processing:
+  --post-process        run all post-processing steps
+  --postprocess-remove-thin-noise
+                        remove thin blobs that span too few Z slices
+  --postprocess-remove-parallel-membrane-misconnections
+                        cut short bridges between parallel membranes
+  --post-process-min-slices N
+                        min Z slices a blob must span (default: 10)
+  --post-process-max-bridge-len N
+                        longest bridge (px) to cut (default: 5)
+  --post-process-max-spur-len N
+                        prune dead-end spurs up to N px (default: 0, off)
+
+Documentation: https://jianlin-cheng.github.io/ETSAM/
 ```
 
-| Argument | Required | Description |
-| --- | --- | --- |
-| `input_tomogram` | Yes | Path to the input tomogram file in `.mrc` format. |
-| `--output-dir` | No | Directory where predicted membrane masks are saved. Default: current directory. |
-| `--logit-threshold` | No | Logit threshold for binarizing the Stage 2 logits into the final mask. Default: `-0.25`. |
-| `--store-logits` | No | Save raw Stage 2 logit scores as an additional `.mrc` file. |
-| `--normalize-method` | No | Input normalization method: `min_max_positive_values` (default) or `softplus_minmax`. |
-| `--stage1-prompt` | No | Stage 1 prompt method: `zero`, `grid`, or `grid_zero` (default). |
-| `--stage2-prompt` | No | Stage 2 prompt method: `zero` (default), `grid`, `grid_zero`, or `etsam_stage1_partial`. |
-| `--split-processing` | No | Split the tomogram into four Y/X quadrants and segment each independently; useful for complex tomograms with closely apposed membranes. |
-| `--post-process` | No | Run all post-processing steps after inference. |
-| `--postprocess-remove-thin-noise` | No | Select the thin 3D noise removal post-processing step. |
-| `--postprocess-remove-parallel-membrane-misconnections` | No | Select the parallel membrane misconnection removal post-processing step. |
-| `--post-process-min-slices` | No | Minimum Z-slice span for keeping connected components during thin-noise removal. Default: `10`. |
-| `--post-process-max-bridge-len` | No | Maximum skeleton bridge length removed during parallel membrane misconnection cleanup. Default: `5`. |
-| `--post-process-max-spur-len` | No | Optional dead-end spur length to prune during misconnection cleanup. Default: `0`. |
-
-The default run produces a single binary mask. These flags — including threshold selection, prompt selection, normalization, split-processing, saved logits, and fine-grained post-processing — are covered in detail in [Advanced Usage](/ETSAM/advanced/).
+A plain `etsam TOMOGRAM` run saves a single binary mask. All options are explained in [Advanced Usage](/ETSAM/advanced/#all-options).
 
 ## Example 1: Prokaryotic Cell
 
 This example downloads an experimental tomogram of *Hylemonella gracilis* from the CryoET Data Portal (Dataset 10160, Run 8354) and runs ETSAM without post-processing.
 
 ### Download the Tomogram
+
+In the `demo` folder (see [Preparations](#preparations)):
 
 ```bash
 wget -P data/ https://files.cryoetdataportal.cziscience.com/10160/ycw2013-01-03-15/Reconstructions/VoxelSpacing16.145/Tomograms/100/ycw2013-01-03-15.mrc
@@ -79,38 +112,43 @@ wget -P data/ https://files.cryoetdataportal.cziscience.com/10160/ycw2013-01-03-
 ### Run ETSAM
 
 ```bash
-python etsam.py data/ycw2013-01-03-15.mrc --output-dir results/cdp_run_8354/
+etsam data/ycw2013-01-03-15.mrc --output-dir results/cdp_run_8354/
 ```
 
 ### Expected Output
 
-As ETSAM runs, it reports each stage of the pipeline to the terminal — reading the tomogram, running Stage 1 and Stage 2 inference, and saving the final mask:
+As ETSAM runs, it reports each stage of the pipeline to the terminal: reading the tomogram, Stage 1 and Stage 2 inference, and saving the final mask:
 
 ```text
-==> Reading input tomogram: data/ycw2013-01-03-15.mrc
+==> Reading input tomogram: /home/user/demo/data/ycw2013-01-03-15.mrc
 Input tomogram shape: (500, 924, 956), voxel size: (16.145, 16.145, 16.145)
-==> Running Stage 1 Prediction with Prompt Method: grid_zero
-==> Loading ETSAM with checkpoint: checkpoints/etsam_stage1_v1.pt
+==> Normalizing tomogram data with min_max_positive_values method
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
 Adjusting hydra overrides for SAM2 video predictor
 ==> Preprocessing the input map
 Loading video frames from numpy array as Floating point array
-using grid of points at first slice as mask prompt
+using grid of points at first slice as mask prompt (grid_interval=50)
 ==> Running ETSAM inference on preprocessed map
-propagate in video: 100%|████████| 500/500 [00:25<00:00, 19.83it/s]
-==> Running Stage 2 Prediction with Prompt Method: zero
-==> Loading ETSAM with checkpoint: checkpoints/etsam_stage2_v1.pt
+propagate in video: 100%|██████████| 500/500 [00:30<00:00, 16.34it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
 Adjusting hydra overrides for SAM2 video predictor
 ==> Preprocessing the input map
 Loading video frames from numpy array as Floating point array
 using zero initialized empty mask as prompt
 ==> Running ETSAM inference on preprocessed map
-propagate in video: 100%|████████| 500/500 [00:31<00:00, 15.66it/s]
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 16.86it/s]
 ==> Saving predicted mask
 -------------------------------------------------------------------------------------------------
 ```
 
+:::note[Model weights]
+The ETSAM installer includes the model weights (1.9 GB). If they are missing, for example in a conda environment from source, ETSAM downloads them on the first run and reports the download progress. Later runs reuse them.
+:::
+
 :::note
-Inference takes approximately 90 seconds on an NVIDIA RTX 4070. Actual time varies by GPU, tomogram size, and available memory.
+The run takes about 100 seconds on an NVIDIA RTX 4070, including loading the models. Actual time varies by GPU, tomogram size, and available memory.
 :::
 
 ### Output Files
@@ -137,6 +175,8 @@ This example demonstrates the `--post-process` flag using an experimental tomogr
 
 ### Download the Tomogram
 
+In the `demo` folder:
+
 ```bash
 wget -P data/ https://files.cryoetdataportal.cziscience.com/10000/TS_037/Reconstructions/VoxelSpacing13.480/Tomograms/100/TS_037.mrc
 ```
@@ -144,7 +184,7 @@ wget -P data/ https://files.cryoetdataportal.cziscience.com/10000/TS_037/Reconst
 ### Run ETSAM with Post-processing
 
 ```bash
-python etsam.py data/TS_037.mrc \
+etsam data/TS_037.mrc \
     --post-process \
     --output-dir results/cdp_run_247/
 ```
@@ -152,18 +192,28 @@ python etsam.py data/TS_037.mrc \
 ### Expected Output
 
 ```text
-==> Reading input tomogram: data/TS_037.mrc
+==> Reading input tomogram: /home/user/demo/data/TS_037.mrc
 Input tomogram shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
-==> Running Stage 1 Prediction with Prompt Method: grid_zero
-==> Loading ETSAM with checkpoint: checkpoints/etsam_stage1_v1.pt
-...
-propagate in video: 100%|████████| 500/500 [00:24<00:00, 20.19it/s]
-==> Running Stage 2 Prediction with Prompt Method: zero
-==> Loading ETSAM with checkpoint: checkpoints/etsam_stage2_v1.pt
-...
-propagate in video: 100%|████████| 500/500 [00:31<00:00, 15.70it/s]
+==> Normalizing tomogram data with min_max_positive_values method
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt (grid_interval=50)
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 16.73it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using zero initialized empty mask as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 16.76it/s]
 ==> Saving predicted mask
-==> Post-processing the predicted mask
+==> Post-processing: remove small noise (min_z_span=10)
+==> Post-processing: remove parallel membrane misconnections (max_bridge_len=5, max_spur_len=0)
 ==> Saving post-processed mask
 -------------------------------------------------------------------------------------------------
 ```

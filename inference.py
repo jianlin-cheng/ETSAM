@@ -66,6 +66,7 @@ def vos_inference(
     offload_video_to_cpu=True,
     offload_state_to_cpu=True,
     grid_interval=50,
+    progress=None,
 ):
     print("==> Preprocessing the input map")
 
@@ -264,6 +265,8 @@ def vos_inference(
             for i, out_obj_id in enumerate(out_obj_ids)
         }
         video_segments[out_frame_idx] = per_obj_output_mask
+        if progress is not None:
+            progress(len(video_segments), num_frames)
 
     per_obj_output_mask_full = {}
     for object_id in object_ids_set:
@@ -297,8 +300,13 @@ def etsam_inference(
     offload_video_to_cpu=True,
     offload_state_to_cpu=True,
     grid_interval=50,
+    device="cuda",
+    progress=None,
 ):
-    """Run ETSAM inference on a single tomogram."""
+    """Run ETSAM inference on a single tomogram.
+
+    progress(slices_done, total_slices) is called after each slice.
+    """
     hydra_overrides_extra = [
         "++model.non_overlap_masks=false"
     ]
@@ -311,6 +319,7 @@ def etsam_inference(
         apply_postprocessing=False,
         hydra_overrides_extra=hydra_overrides_extra,
         vos_optimized=False,
+        device=device,
     )
 
     return vos_inference(
@@ -323,4 +332,5 @@ def etsam_inference(
         offload_video_to_cpu=offload_video_to_cpu,
         offload_state_to_cpu=offload_state_to_cpu,
         grid_interval=grid_interval,
+        progress=progress,
     )

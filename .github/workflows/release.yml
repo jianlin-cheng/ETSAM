@@ -1,0 +1,138 @@
+# Release: push a version tag (git tag v1.2.3 && git push origin v1.2.3).
+#
+# Builds everything first: the ETSAM installers (built and test-installed), the
+# napari plugin and the ChimeraX bundle, all with the tag's version. Only if all
+# of them succeed is the GitHub release created, with the installers and the
+# ChimeraX bundle attached; then the version in main's pyproject.toml files is
+# updated to the tag's version, the napari plugin is published to PyPI and the
+# documentation is deployed (from main). If any build fails, nothing is published. See
+# RELEASING.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  installers:
+    name: Installers
+    uses: ./.github/workflows/installer.yml
+
+  napari-plugin:
+    name: napari plugin
+    uses: ./.github/workflows/napari-plugin.yml
+
+  chimerax-plugin:
+    name: ChimeraX plugin
+    uses: ./.github/workflows/chimerax-plugin.yml
+
+  release:
+    name: Create the GitHub release
+    needs: [installers, napari-plugin, chimerax-plugin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download the installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          pattern: ETSAM-*
+          merge-multiple: true
+
+      - name: Download the ChimeraX bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: chimerax-bundle
+          path: release
+
+      - name: List the release files
+        run: ls -l release
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+  # The tag's version only exists in the CI builds (set_version.py rewrites the
+  # pyproject.toml files there); commit it to main as well, so that builds from a
+  # checkout (pip install -e ., conda) report the released version. The commit is
+  # pushed with the workflow's token, which does not start other workflows.
+  bump-version:
+    name: Update the version in main
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set the version from the release tag
+        run: python .github/scripts/set_version.py "$GITHUB_REF_NAME"
+
+      - name: Commit and push to main
+        run: |
+          # only for tags on main (a tag on another branch must not change main)
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::notice::The tag $GITHUB_REF_NAME is not on main; main's version is not changed."
+            exit 0
+          fi
+          if git diff --quiet; then
+            echo "main already has the version of $GITHUB_REF_NAME."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Set the version to ${GITHUB_REF_NAME#v} (release $GITHUB_REF_NAME)"
+          git push origin HEAD:main
+
+  # Publishing (PyPI, documentation) only happens in the main repository; in a
+  # fork, a tag still builds everything and creates the fork's GitHub release.
+  pypi:
+    name: Publish the napari plugin to PyPI
+    needs: release
+    if: github.repository == 'jianlin-cheng/ETSAM'
+    runs-on: ubuntu-latest
+    # PyPI trusted publishing: before the first release, add a "pending
+    # publisher" for the project napari-etsam on
+    # https://pypi.org/manage/account/publishing/ with owner jianlin-cheng,
+    # repository ETSAM, workflow release.yml and environment pypi.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/napari-etsam/
+    permissions:
+      id-token: write
+    steps:
+      - name: Download the napari plugin
+        uses: actions/download-artifact@v4
+        with:
+          name: Packages
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # GitHub Pages only accepts deployments from main (the github-pages
+  # environment's branch rule), not from a tag, so deploy the docs by running the
+  # docs workflow on main.
+  docs:
+    name: Deploy the documentation
+    needs: release
+    if: github.repository == 'jianlin-cheng/ETSAM'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run the docs workflow on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-docs.yml --repo "$GITHUB_REPOSITORY" --ref main

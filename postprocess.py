@@ -42,41 +42,35 @@ except ImportError:
     skeletonize = None
 
 
-def add_postprocess_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register shared postprocessing CLI flags on ``parser``."""
+def add_postprocess_arguments(parser) -> None:
+    """Register shared postprocessing CLI flags on ``parser`` (a parser or an argument group)."""
     parser.add_argument(
-        "--post-process",
-        help="run all postprocessing steps",
-        action="store_true",
-    )
+        "--post-process", action="store_true",
+        help="run all post-processing steps",
+    )  # fmt: skip
     parser.add_argument(
-        "--postprocess-remove-thin-noise",
-        help="remove thin 3D blobs that do not span enough Z slices",
-        action="store_true",
-    )
+        "--postprocess-remove-thin-noise", action="store_true",
+        help="remove thin blobs that span too few Z slices",
+    )  # fmt: skip
     parser.add_argument(
-        "--postprocess-remove-parallel-membrane-misconnections",
-        help="sever small 2D misconnections between parallel membranes per Z slice",
-        action="store_true",
-    )
+        "--postprocess-remove-parallel-membrane-misconnections", action="store_true",
+        help="cut short bridges between parallel membranes",
+    )  # fmt: skip
     parser.add_argument(
-        "--post-process-min-slices",
-        help="minimum number of Z slices a blob (connected component) must span to be kept",
-        type=int,
+        "--post-process-min-slices", metavar="N", type=int,
         default=DEFAULT_POST_PROCESS_MIN_SLICES,
-    )
+        help=f"min Z slices a blob must span (default: {DEFAULT_POST_PROCESS_MIN_SLICES})",
+    )  # fmt: skip
     parser.add_argument(
-        "--post-process-max-bridge-len",
-        help="max skeleton length (px) of a rung between two distinct junctions to remove",
-        type=int,
+        "--post-process-max-bridge-len", metavar="N", type=int,
         default=DEFAULT_MAX_BRIDGE_LEN,
-    )
+        help=f"longest bridge (px) to cut (default: {DEFAULT_MAX_BRIDGE_LEN})",
+    )  # fmt: skip
     parser.add_argument(
-        "--post-process-max-spur-len",
-        help="if > 0, also prune dead-end spurs up to this length (px)",
-        type=int,
+        "--post-process-max-spur-len", metavar="N", type=int,
         default=DEFAULT_MAX_SPUR_LEN,
-    )
+        help=f"prune dead-end spurs up to N px (default: {DEFAULT_MAX_SPUR_LEN}, off)",
+    )  # fmt: skip
 
 
 def postprocess_requested(args: argparse.Namespace) -> bool:
@@ -362,18 +356,16 @@ def save_mask(mask: np.ndarray, voxel_size, output_map_file_path: str) -> None:
 
 
 def _run_cli() -> None:
-    parser = argparse.ArgumentParser(description="Post-process a 3D binary mask MRC.")
-    parser.add_argument(
-        "input_mask_file_path",
-        help="Input binary mask MRC file path",
-        type=str,
+    parser = argparse.ArgumentParser(
+        prog="etsam-postprocess",
+        usage="etsam-postprocess [options] INPUT_MASK OUTPUT_MASK",
+        description="Post-process a binary membrane mask (.mrc) from ETSAM.",
+        epilog="Documentation: https://jianlin-cheng.github.io/ETSAM/advanced/",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=24),
     )
-    parser.add_argument(
-        "output_mask_file_path",
-        help="Output postprocessed mask MRC file path",
-        type=str,
-    )
-    add_postprocess_arguments(parser)
+    parser.add_argument("input_mask_file_path", metavar="INPUT_MASK", help="input mask (.mrc)")
+    parser.add_argument("output_mask_file_path", metavar="OUTPUT_MASK", help="output mask (.mrc)")
+    add_postprocess_arguments(parser.add_argument_group("post-processing"))
     args = parser.parse_args()
 
     input_path = os.path.abspath(args.input_mask_file_path)

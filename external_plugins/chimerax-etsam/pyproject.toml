@@ -1,0 +1,50 @@
+[build-system]
+requires = ["ChimeraX-BundleBuilder>=1.4.0"]
+build-backend = "chimerax.bundle_builder.cx_pep517"
+
+[project]
+name = "ChimeraX-ETSAM"
+version = "1.1.0"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Joel Selvaraj", email = "jsbrq@missouri.edu" }]
+description = "Segment cell membranes in cryo-ET tomograms with ETSAM"
+dependencies = ["ChimeraX-Core>=1.6"]
+dynamic = ["classifiers", "requires-python"]
+
+[project.readme]
+content-type = "text"
+text = """Segment cell membranes in cryo-electron tomograms (.mrc) with ETSAM, a
+two-stage SAM 2 model. Adds the tool Tools > Volume Data > ETSAM Membrane
+Segmentation and the command 'etsam'. ETSAM runs in its own conda environment,
+installed as for the ETSAM command line, so it never conflicts with ChimeraX."""
+
+[project.urls]
+Home = "https://github.com/jianlin-cheng/ETSAM"
+Documentation = "https://jianlin-cheng.github.io/ETSAM/chimerax/"
+
+[chimerax]
+custom-init = true
+min-session-version = 1
+max-session-version = 1
+categories = ["Volume Data"]
+classifiers = ["Development Status :: 5 - Production/Stable"]
+
+[chimerax.package-data]
+"src/docs" = ["*.html", "*.png"]
+
+[chimerax.tool."ETSAM Membrane Segmentation"]
+category = "Volume Data"
+description = "Segment membranes in cryo-ET tomograms with ETSAM"
+
+[chimerax.command."etsam segment"]
+category = "Volume Data"
+description = "Segment membranes in cryo-ET tomograms with ETSAM"
+
+[chimerax.command."etsam save"]
+category = "Volume Data"
+description = "Save an ETSAM result: the mask at the current threshold, or the logits"
+
+[chimerax.command."etsam cancel"]
+category = "Volume Data"
+description = "Cancel the running ETSAM job"

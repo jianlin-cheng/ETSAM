@@ -1,0 +1,141 @@
+name: Build Installers
+
+# Builds and tests the ETSAM installers (Linux .sh and Windows .exe) with conda
+# constructor; see installer/README.md. Runs on demand, and as part of a release
+# (release.yml), which attaches the installers to the GitHub release; that is
+# where the ChimeraX and napari plugins download the installer from.
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ETSAM installer (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: Linux-x86_64
+            extension: sh
+          - os: windows-latest
+            platform: Windows-x86_64
+            extension: exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          activate-environment: etsam-build
+          channels: conda-forge
+
+      - name: Install the build tools
+        run: conda install --yes -c conda-forge rattler-build constructor
+
+      # Releases (run for a version tag): the installer gets the tag's version
+      # (v1.2.3 -> 1.2.3).
+      - name: Set the version from the release tag
+        if: github.ref_type == 'tag'
+        run: python .github/scripts/set_version.py "$GITHUB_REF_NAME"
+
+      - name: Build the installer
+        run: installer/build.sh
+
+      # The installer's file name contains the version (ETSAM-1.2.3-Linux-x86_64.sh).
+      - name: Find the installer
+        run: |
+          shopt -s nullglob
+          files=(installer/build/installer/ETSAM-*-${{ matrix.platform }}.${{ matrix.extension }})
+          test "${#files[@]}" = 1 || { echo "expected one installer, found: ${files[*]:-none}"; exit 1; }
+          path="$PWD/${files[0]}"
+          if command -v cygpath >/dev/null 2>&1; then path="$(cygpath -m "$path")"; fi  # Windows path
+          echo "INSTALLER_PATH=$path" >> "$GITHUB_ENV"
+          echo "Installer: ${files[0]}"
+
+      # CI machines have no GPU: skip the NVIDIA check and install the CPU
+      # build of PyTorch, to check that the installer works end to end.
+      - name: Test the installer (Linux)
+        if: runner.os == 'Linux'
+        env:
+          ETSAM_SKIP_GPU_CHECK: "1"
+          ETSAM_ACCELERATOR: cpu
+          ETSAM_SKIP_WEIGHTS: "1"
+        run: |
+          # install as users do (curl ... | sh), with the installer built above
+          cat docs/public/install.sh | ETSAM_INSTALLER="$INSTALLER_PATH" ETSAM_PREFIX="$RUNNER_TEMP/etsam_env" sh
+          test -f "$RUNNER_TEMP/etsam_env/.etsam-installer"
+          "$RUNNER_TEMP/etsam_env/bin/python" -c "import etsam, postprocess, torch; print('ETSAM OK, PyTorch', torch.__version__)"
+          "$RUNNER_TEMP/etsam_env/bin/etsam" --help
+          "$RUNNER_TEMP/etsam_env/bin/etsam-postprocess" --help
+          # the etsam commands, as found in a new terminal: the folder commands/
+          # holds only them, and is added to the PATH in ~/.profile and ~/.bashrc
+          # (only the installer's line is run: the runner's own startup files may
+          # contain lines for other shells)
+          test "$(ls "$RUNNER_TEMP/etsam_env/commands")" = "$(printf 'etsam\netsam-postprocess')"
+          grep -q "$RUNNER_TEMP/etsam_env/commands" "$HOME/.profile" "$HOME/.bashrc"
+          line="$(grep "added by the ETSAM installer" "$HOME/.profile")"
+          env -i HOME="$HOME" PATH=/usr/bin:/bin sh -c "$line; etsam --help && etsam-postprocess --help"
+          # the commands use ETSAM's own environment: a broken etsam module on the
+          # user's PYTHONPATH must not be picked up
+          mkdir -p "$RUNNER_TEMP/fake" && echo 'raise SystemExit("wrong etsam module")' > "$RUNNER_TEMP/fake/etsam.py"
+          PYTHONPATH="$RUNNER_TEMP/fake" "$RUNNER_TEMP/etsam_env/commands/etsam" --help
+          # install again: the existing installation is found and reinstalled, and a
+          # model weights file in it is kept
+          mkdir -p "$RUNNER_TEMP/etsam_env/checkpoints"
+          echo keep > "$RUNNER_TEMP/etsam_env/checkpoints/canary"
+          cat docs/public/install.sh | ETSAM_YES=1 ETSAM_INSTALLER="$INSTALLER_PATH" ETSAM_PREFIX="$RUNNER_TEMP/etsam_env" sh
+          test "$(cat "$RUNNER_TEMP/etsam_env/checkpoints/canary")" = keep
+          test -f "$RUNNER_TEMP/etsam_env/.etsam-installer"
+          "$RUNNER_TEMP/etsam_env/commands/etsam" --help
+
+      - name: Test the installer (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        env:
+          ETSAM_SKIP_GPU_CHECK: "1"
+          ETSAM_ACCELERATOR: cpu
+          ETSAM_SKIP_WEIGHTS: "1"
+        run: |
+          rem install as users do (irm ... ^| iex), with the installer built above
+          set "ETSAM_INSTALLER=%INSTALLER_PATH%"
+          set "ETSAM_PREFIX=%RUNNER_TEMP%\etsam_env"
+          powershell -NoProfile -ExecutionPolicy Bypass -c "Get-Content -Raw docs\public\install.ps1 | iex"
+          if errorlevel 1 (
+            echo ===== output of the failed installation step: .step.log =====
+            if exist "%RUNNER_TEMP%\etsam_env\.step.log" type "%RUNNER_TEMP%\etsam_env\.step.log"
+            exit /b 1
+          )
+          if not exist "%RUNNER_TEMP%\etsam_env\.etsam-installer" exit /b 1
+          "%RUNNER_TEMP%\etsam_env\python.exe" -c "import etsam, postprocess, torch; print('ETSAM OK, PyTorch', torch.__version__)"
+          rem the etsam commands, as found in a new terminal: the folder commands
+          rem holds only them, and is on the user's PATH
+          powershell -NoProfile -Command "if (([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -notcontains ($env:RUNNER_TEMP + '\etsam_env\commands')) { exit 1 }" || exit /b 1
+          call "%RUNNER_TEMP%\etsam_env\commands\etsam.cmd" --help || exit /b 1
+          call "%RUNNER_TEMP%\etsam_env\commands\etsam-postprocess.cmd" --help || exit /b 1
+          rem install again: the existing installation is found, uninstalled and installed
+          rem again, and a model weights file in it is kept
+          mkdir "%RUNNER_TEMP%\etsam_env\checkpoints"
+          echo keep> "%RUNNER_TEMP%\etsam_env\checkpoints\canary"
+          set "ETSAM_YES=1"
+          powershell -NoProfile -ExecutionPolicy Bypass -c "Get-Content -Raw docs\public\install.ps1 | iex"
+          if errorlevel 1 exit /b 1
+          if not exist "%RUNNER_TEMP%\etsam_env\checkpoints\canary" exit /b 1
+          if not exist "%RUNNER_TEMP%\etsam_env\.etsam-installer" exit /b 1
+          call "%RUNNER_TEMP%\etsam_env\commands\etsam.cmd" --help || exit /b 1
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ETSAM-installer-${{ matrix.platform }}
+          path: ${{ env.INSTALLER_PATH }}
+          if-no-files-found: error

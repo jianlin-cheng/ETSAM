@@ -13,7 +13,7 @@ Common issues encountered when installing or running ETSAM, and how to resolve t
 
 If ETSAM produces an empty mask or misses parts of the membranes, several options are worth trying before giving up on a tomogram:
 
-- **Use a grid prompt for Stage 1.** Seeding Stage 1 with a grid of points every 50th slice can help in better detection of membranes: `python etsam.py input.mrc --stage1-prompt grid --output-dir results/`. This is not recommended unless you have issues with default prompt method, as it can introduce more noise into prediction.
+- **Use a grid prompt for Stage 1.** Seeding Stage 1 with a grid of points every 50th slice can help in better detection of membranes: `etsam input.mrc --stage1-prompt grid --output-dir results/`. This is not recommended unless you have issues with default prompt method, as it can introduce more noise into prediction.
 - **Try `softplus_minmax` normalization.** Switching from the default `min_max_positive_values` normalization method to `--normalize-method softplus_minmax` can improve membrane contrast on some tomograms.
 - **Use `--split-processing`.** Splitting the tomogram into quadrants and segmenting each with a denser prompt grid improves detection in complex tomograms, especially where membranes are closely apposed.
 - **Denoise the tomogram.** can help in better detection of membranes.
@@ -30,7 +30,7 @@ nvidia-smi
 nvcc --version
 ```
 
-When using a [Dev Container](/ETSAM/installation/#method-2-installation-using-dev-containers), run `nvidia-smi` inside the container's terminal to confirm the GPU is accessible from within the container.
+When using a [Dev Container](/ETSAM/installation/#method-3-dev-container), run `nvidia-smi` inside the container's terminal to confirm the GPU is accessible from within the container.
 
 ## Overriding the CUDA Version
 

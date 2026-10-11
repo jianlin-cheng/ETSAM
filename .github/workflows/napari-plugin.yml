@@ -1,0 +1,40 @@
+# napari plugin (external_plugins/napari-etsam): builds the package and uploads
+# it as the "Packages" workflow artifact. Part of a release (release.yml), which
+# publishes it to PyPI.
+#
+# Based on the test_and_deploy workflow of napari's plugin template
+# (https://github.com/napari/napari-plugin-template), adapted to a plugin in a
+# subfolder of this repository. The package version comes from the git tag
+# (v1.2.3 -> 1.2.3) through setuptools-scm.
+name: napari plugin
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - external_plugins/napari-etsam/**
+      - .github/workflows/napari-plugin.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - external_plugins/napari-etsam/**
+      - .github/workflows/napari-plugin.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # setuptools-scm needs the tags for the version
+      # Builds the sdist and wheel, checks them, and uploads them as the
+      # "Packages" artifact.
+      - uses: hynek/build-and-inspect-python-package@v3.0.1
+        with:
+          path: external_plugins/napari-etsam

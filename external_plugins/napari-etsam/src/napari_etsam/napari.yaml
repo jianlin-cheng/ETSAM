@@ -1,0 +1,34 @@
+name: napari-etsam
+display_name: napari-etsam
+visibility: public
+categories: ["Segmentation", "IO", "Annotation"]
+contributions:
+  commands:
+    - id: napari-etsam.widget
+      python_name: napari_etsam._widget:ETSAMWidget
+      title: ETSAM Membrane Segmentation
+    - id: napari-etsam.get_reader
+      python_name: napari_etsam._reader:get_reader
+      title: Open MRC tomogram
+    - id: napari-etsam.write_labels
+      python_name: napari_etsam._writer:write_labels
+      title: Save labels as MRC
+    - id: napari-etsam.write_image
+      python_name: napari_etsam._writer:write_image
+      title: Save image as MRC
+  widgets:
+    - command: napari-etsam.widget
+      display_name: ETSAM Membrane Segmentation
+  readers:
+    - command: napari-etsam.get_reader
+      accepts_directories: false
+      filename_patterns: ["*.mrc", "*.MRC", "*.rec", "*.map", "*.mrcs", "*.st", "*.ali"]
+  writers:
+    - command: napari-etsam.write_labels
+      layer_types: ["labels"]
+      filename_extensions: [".mrc"]
+      display_name: MRC mask
+    - command: napari-etsam.write_image
+      layer_types: ["image"]
+      filename_extensions: [".mrc"]
+      display_name: MRC volume

@@ -2,14 +2,38 @@
 title: Advanced Usage
 description: Tune logit thresholds, normalization, prompts, split-processing, and post-processing for per-tomogram optimization of ETSAM.
 prev:
-  label: Tutorial
-  link: /ETSAM/tutorial/
+  label: napari Plugin
+  link: /ETSAM/napari/
 next:
   label: Training
   link: /ETSAM/training/
 ---
 
 ETSAM exposes several inference flags for per-tomogram optimization. These options are useful when you want to trade sensitivity against precision, inspect confidence values, handle complex tomograms with closely apposed membranes, or tune artifact removal.
+
+## All Options
+
+`etsam [options] TOMOGRAM` segments one tomogram (`.mrc`) per run. The sections below explain each option in detail.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `TOMOGRAM` | (required) | Input tomogram in `.mrc` format. |
+| `-V`, `--version` | | Print the installed ETSAM version and exit. |
+| `--output-dir DIR` | current folder | Folder where the predicted mask (and the other outputs) are saved. |
+| `--logit-threshold T` | `-0.25` | Threshold for binarizing the Stage 2 logits into the final mask. See [Custom Logit Threshold](#custom-logit-threshold). |
+| `--store-logits` | off | Also save the raw Stage 2 logits (membrane scores) as an `.mrc` file. See [Store Predicted Logit Scores](#store-predicted-logit-scores). |
+| `--split-processing` | off | Segment the four Y/X quadrants of the tomogram separately; useful for complex tomograms with closely apposed membranes. See [Split Processing](#split-processing). |
+| `--normalize-method M` | `min_max_positive_values` | Input normalization: `min_max_positive_values` or `softplus_minmax`. See [Tomogram Normalization](#tomogram-normalization). |
+| `--stage1-prompt P` | `grid_zero` | Stage 1 prompt method: `zero`, `grid` or `grid_zero`. See [Prompt Methods](#prompt-methods). |
+| `--stage2-prompt P` | `zero` | Stage 2 prompt method: `zero`, `grid`, `grid_zero` or `etsam_stage1_partial`. See [Prompt Methods](#prompt-methods). |
+| `--post-process` | off | Run all post-processing steps after inference. See [Run post-processing integrated with etsam](#run-post-processing-integrated-with-etsam). |
+| `--postprocess-remove-thin-noise` | off | Run only the thin-noise removal step. See [Remove Small Noise](#remove-small-noise). |
+| `--postprocess-remove-parallel-membrane-misconnections` | off | Run only the step that cuts short bridges between parallel membranes. See [Remove Parallel Membrane Misconnections](#remove-parallel-membrane-misconnections). |
+| `--post-process-min-slices N` | `10` | Minimum number of Z slices a connected blob must span to be kept by thin-noise removal. |
+| `--post-process-max-bridge-len N` | `5` | Longest skeleton bridge (px) between two junctions that misconnection removal cuts. |
+| `--post-process-max-spur-len N` | `0` (off) | If greater than 0, also prune dead-end spurs up to this length (px). |
+
+The post-processing options are also available in the separate `etsam-postprocess` command, which works on an existing mask; see [Post-processing with `etsam-postprocess`](#post-processing-with-etsam-postprocess).
 
 ## Custom Logit Threshold
 
@@ -22,7 +46,7 @@ The default logit threshold is `-0.25`, selected from ablation studies for the b
 Use `--logit-threshold` to override the default:
 
 ```bash
-python etsam.py input.mrc \
+etsam input.mrc \
     --logit-threshold -0.5 \
     --output-dir results/
 ```
@@ -38,7 +62,7 @@ python etsam.py input.mrc \
 ETSAM can save raw logit scores as an `.mrc` file in addition to the binary mask. This lets you visualize model confidence, explore thresholds interactively in UCSF ChimeraX or IMOD, and build custom workflows over continuous scores.
 
 ```bash
-python etsam.py input.mrc \
+etsam input.mrc \
     --store-logits \
     --output-dir results/
 ```
@@ -60,7 +84,7 @@ A useful workflow is to first run with `--store-logits`, inspect the logit volum
 Before inference, ETSAM normalizes the input tomogram. The `--normalize-method` flag selects the strategy:
 
 ```bash
-python etsam.py input.mrc \
+etsam input.mrc \
     --normalize-method softplus_minmax \
     --output-dir results/
 ```
@@ -84,7 +108,7 @@ ETSAM is a two-stage model, and each stage uses an automatic prompting strategy 
 They can be overridden and experimented with in the following way:
 
 ```bash
-python etsam.py input.mrc \
+etsam input.mrc \
     --stage1-prompt grid \
     --stage2-prompt etsam_stage1_partial \
     --output-dir results/
@@ -100,7 +124,7 @@ python etsam.py input.mrc \
 For complex tomograms — for example, those with closely apposed cell membranes that tend to merge into a single blob — `--split-processing` divides the tomogram into four quadrants (halving the Y and X axes), runs the full two-stage pipeline on each independently, and merges the results back into a full-size volume. The smaller regions are seeded with a denser prompt grid (grid of points every 10 voxel instead of default 50 voxel space) to provide better delineation of individual membranes.
 
 ```bash
-python etsam.py input.mrc \
+etsam input.mrc \
     --split-processing \
     --output-dir results/
 ```
@@ -112,17 +136,116 @@ results/
 |-- input_etsam_predicted_split_processing_mask.mrc
 ```
 
+<details>
+<summary>Example terminal output (TS_037 from the <a href="/ETSAM/tutorial/#example-2-eukaryotic-cell-with-post-processing">tutorial</a>)</summary>
+
+```text
+$ etsam data/TS_037.mrc --split-processing --output-dir results/
+==> Reading input tomogram: /home/user/demo/data/TS_037.mrc
+Input tomogram shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
+==> Normalizing tomogram data with min_max_positive_values method
+==> Split tomogram into 4 sub-tomograms (split-processing mode, grid_interval=10)
+    top-left: shape (500, 464, 480), Y[0:464] X[0:480]
+    top-right: shape (500, 464, 480), Y[0:464] X[480:960]
+    bottom-left: shape (500, 464, 480), Y[464:928] X[0:480]
+    bottom-right: shape (500, 464, 480), Y[464:928] X[480:960]
+==> Processing quadrant: top-left
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt (grid_interval=10)
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:28<00:00, 17.28it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using zero initialized empty mask as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.12it/s]
+==> Processing quadrant: top-right
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt (grid_interval=10)
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.07it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using zero initialized empty mask as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.05it/s]
+==> Processing quadrant: bottom-left
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt (grid_interval=10)
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.07it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using zero initialized empty mask as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:28<00:00, 17.25it/s]
+==> Processing quadrant: bottom-right
+==> Stage 1 prediction (prompt: grid_zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage1_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using grid of points at first slice as mask prompt (grid_interval=10)
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.24it/s]
+==> Stage 2 prediction (prompt: zero)
+==> Loading ETSAM with checkpoint:  /home/user/etsam_env/checkpoints/etsam_stage2_v1.pt
+Adjusting hydra overrides for SAM2 video predictor
+==> Preprocessing the input map
+Loading video frames from numpy array as Floating point array
+using zero initialized empty mask as prompt
+==> Running ETSAM inference on preprocessed map
+propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.23it/s]
+==> Combining quadrant logits into full volume
+==> Saving predicted mask
+-------------------------------------------------------------------------------------------------
+```
+
+</details>
+
 :::note
-Split-processing runs inference four times, so it takes roughly four times longer than a standard run.
+Split-processing runs inference four times (on smaller regions), so it takes roughly three to four times longer than a standard run: 293 seconds instead of 93 for the tutorial's TS_037 tomogram on an NVIDIA RTX 4070.
 :::
 
-## Post-processing with `postprocess.py`
+## Post-processing with `etsam-postprocess`
 
-Post-processing operates on an existing binary mask, so you can run it as a standalone step on a previously generated mask without re-running inference. `postprocess.py` takes an input mask and an output path:
+Post-processing operates on an existing binary mask, so you can run it as a standalone step on a previously generated mask without re-running inference. `etsam-postprocess` takes an input mask and an output path:
 
 ```bash
-python postprocess.py results/input_etsam_predicted_mask.mrc \
-    results/input_post_processed_mask.mrc
+etsam-postprocess results/cdp_run_247/TS_037_etsam_predicted_mask.mrc \
+    results/cdp_run_247/TS_037_post_processed_mask.mrc
+```
+
+Example output, using the mask from [Example 2 of the tutorial](/ETSAM/tutorial/#example-2-eukaryotic-cell-with-post-processing):
+
+```text
+==> Reading input mask: /home/user/demo/results/cdp_run_247/TS_037_etsam_predicted_mask.mrc
+Input mask shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
+==> Post-processing: remove small noise (min_z_span=10)
+==> Post-processing: remove parallel membrane misconnections (max_bridge_len=5, max_spur_len=0)
+==> Saving post-processed mask: /home/user/demo/results/cdp_run_247/TS_037_post_processed_mask.mrc
+Done.
 ```
 
 With no method flags, **all** post-processing steps run.
@@ -138,9 +261,18 @@ The following two post-processing steps are available, and you can select them i
 This step identifies 3D connected components in the mask and removes blobs that do not span a minimum number of consecutive Z-slices, eliminating small, isolated noise while preserving larger continuous membranes.
 
 ```bash
-python postprocess.py mask_in.mrc mask_out.mrc \
+etsam-postprocess results/cdp_run_247/TS_037_etsam_predicted_mask.mrc \
+    results/cdp_run_247/TS_037_min_slices_5_mask.mrc \
     --postprocess-remove-thin-noise \
     --post-process-min-slices 5
+```
+
+```text
+==> Reading input mask: /home/user/demo/results/cdp_run_247/TS_037_etsam_predicted_mask.mrc
+Input mask shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
+==> Post-processing: remove small noise (min_z_span=5)
+==> Saving post-processed mask: /home/user/demo/results/cdp_run_247/TS_037_min_slices_5_mask.mrc
+Done.
 ```
 
 The minimum span is controlled by `--post-process-min-slices` (default `10`):
@@ -156,10 +288,19 @@ The minimum span is controlled by `--post-process-min-slices` (default `10`):
 This step skeletonizes each Z-slice and severs short "rung" interconnections that incorrectly bridge two parallel membranes, helping to delineate closely apposed membranes that the segmentation fused together.
 
 ```bash
-python postprocess.py mask_in.mrc mask_out.mrc \
+etsam-postprocess results/cdp_run_247/TS_037_etsam_predicted_mask.mrc \
+    results/cdp_run_247/TS_037_bridge_8_mask.mrc \
     --postprocess-remove-parallel-membrane-misconnections \
     --post-process-max-bridge-len 8 \
     --post-process-max-spur-len 5
+```
+
+```text
+==> Reading input mask: /home/user/demo/results/cdp_run_247/TS_037_etsam_predicted_mask.mrc
+Input mask shape: (500, 928, 960), voxel size: (13.480796, 13.480796, 13.480796)
+==> Post-processing: remove parallel membrane misconnections (max_bridge_len=8, max_spur_len=5)
+==> Saving post-processed mask: /home/user/demo/results/cdp_run_247/TS_037_bridge_8_mask.mrc
+Done.
 ```
 
 | Flag | Default | Description |
@@ -169,4 +310,4 @@ python postprocess.py mask_in.mrc mask_out.mrc \
 
 ### Run post-processing integrated with etsam
 
-Post-processing can also be applied in an integrated manner directly from `etsam.py` using the same flags from postprocess.py as discussed above. For example: `python etsam.py input.mrc --post-process --output-dir results/` will run all post-processing steps. or `python etsam.py input.mrc --postprocess-remove-thin-noise --output-dir results/` to only remove small and thin noise blobs.
+Post-processing can also be applied in an integrated manner directly from the `etsam` command using the same flags as `etsam-postprocess`. For example: `etsam input.mrc --post-process --output-dir results/` will run all post-processing steps. or `etsam input.mrc --postprocess-remove-thin-noise --output-dir results/` to only remove small and thin noise blobs.

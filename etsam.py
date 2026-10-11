@@ -1,5 +1,14 @@
 import argparse
+import hashlib
+import http.client
+import importlib.metadata
 import os
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import mrcfile
 import numpy as np
@@ -9,6 +18,16 @@ import inference
 import postprocess
 
 MEMBRANE_OBJECT_ID = 1
+CONFIG = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+CHECKPOINT_URL = "https://zenodo.org/records/17571925/files/{}"
+CHECKPOINT_MD5 = {
+    "etsam_stage1_v1.pt": "db2dc46d775a17619e0a657aabaf0636",
+    "etsam_stage2_v1.pt": "170488377f1424be1c431bc7983c21b4",
+}
+# Zenodo limits the speed of each connection, so the weights are downloaded in
+# parallel parts (measured: 1 connection 0.45 MB/s, 16 3.8 MB/s, 32 6.9 MB/s,
+# 64 13.3 MB/s).
+DOWNLOAD_CONNECTIONS = int(os.environ.get("ETSAM_DOWNLOAD_CONNECTIONS", "64"))
 
 
 def min_max_normalize(array):
@@ -70,6 +89,8 @@ def run_two_stage_inference_on_tomogram(
     stage2_prompt,
     grid_interval,
     stage1_logit_threshold,
+    device="cuda",
+    progress=None,
 ):
     """
     Run the two-stage ETSAM pipeline on a (Z, Y, X) volume (full tomogram or a sub-region).
@@ -77,6 +98,7 @@ def run_two_stage_inference_on_tomogram(
     Normalizes the volume, runs stage 1, fuses logits with the normalized tomogram, then runs stage 2.
 
     Returns the stage-2 logits array matching the input spatial shape.
+    progress(stage, slices_done, total_slices) is called after each slice.
     """
     print(f"==> Stage 1 prediction (prompt: {stage1_prompt})")
     stage1_logits = inference.etsam_inference(
@@ -85,6 +107,8 @@ def run_two_stage_inference_on_tomogram(
         ckpt_path=stage1_ckpt_path,
         prompt_method=stage1_prompt,
         grid_interval=grid_interval,
+        device=device,
+        progress=None if progress is None else lambda done, total: progress(1, done, total),
     )[MEMBRANE_OBJECT_ID]
 
     stage1_mask = (stage1_logits > stage1_logit_threshold).astype(np.uint8)
@@ -101,6 +125,8 @@ def run_two_stage_inference_on_tomogram(
         ckpt_path=stage2_ckpt_path,
         prompt_method=stage2_prompt,
         grid_interval=grid_interval,
+        device=device,
+        progress=None if progress is None else lambda done, total: progress(2, done, total),
     )[MEMBRANE_OBJECT_ID]
 
     return stage2_logits
@@ -119,63 +145,293 @@ def combine_quadrant_logits(quadrant_results, full_shape):
     return combined
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser("etsam.py")
-    parser.add_argument(
-        "input_tomogram_file_path", help="input tomogram file path", type=str
-    )
-    parser.add_argument("--output-dir", help="Output directory", type=str, default="./")
-    parser.add_argument(
-        "--logit-threshold",
-        help="threshold for converting preditcted logits (likelihood scores) to binary mask",
-        type=float,
-        default=-0.25,
-    )
-    parser.add_argument(
-        "--store-logits",
-        help="store predicted logits (likelihood scores) in separate file along with binary mask",
-        action="store_true",
-    )
-    postprocess.add_postprocess_arguments(parser)
-    parser.add_argument(
-        "--split-processing",
-        help="split the tomogram into four smaller tomograms (Y/X), run etsam on them independently, then merge the results; use for complex tomograms with closely apposed cell membranes",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--stage1-prompt",
-        help="prompt for stage 1 (grid or zero)",
-        type=str,
-        default="grid_zero",
-        choices=["zero", "grid", "grid_zero"],
-    )
-    parser.add_argument(
-        "--stage2-prompt",
-        help="prompt for stage 2 (zero, grid, grid_zero or etsam_stage1_partial)",
-        type=str,
-        default="zero",
-        choices=["zero", "grid", "grid_zero", "etsam_stage1_partial"],
-    )
+def ensure_checkpoints(progress=None):
+    """
+    Return the stage 1 and stage 2 checkpoint paths, downloading them on first use.
 
-    parser.add_argument(
-        "--normalize-method",
-        help="method for normalizing the tomogram data",
-        type=str,
-        default="min_max_positive_values",
-        choices=["min_max_positive_values", "softplus_minmax"],
+    Uses checkpoints/ next to this file if present, then checkpoints/ in the Python
+    environment (where the ETSAM installer puts them), otherwise $ETSAM_CHECKPOINT_DIR
+    (default ~/.cache/etsam). progress(fraction, message) reports the download.
+    """
+    repo_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints")
+    env_dir = os.path.join(sys.prefix, "checkpoints")
+    cache_dir = os.environ.get(
+        "ETSAM_CHECKPOINT_DIR", os.path.join(os.path.expanduser("~"), ".cache", "etsam")
     )
+    paths = []
+    for name, md5 in CHECKPOINT_MD5.items():
+        url = CHECKPOINT_URL.format(name)
+        path = os.path.join(repo_dir, name)
+        if not os.path.exists(path):
+            path = os.path.join(env_dir, name)
+        if not os.path.exists(path):
+            path = os.path.join(cache_dir, name)
+        if os.path.exists(path) and not path.startswith(repo_dir):
+            # Keep a downloaded checkpoint unless it came from another URL than
+            # the one this version of ETSAM uses (e.g. after an upgrade).
+            if _recorded_source(path) not in (None, url):
+                print(f"==> {name} is outdated (new download URL), downloading it again", flush=True)
+                os.remove(path)
+            else:
+                _record_source(path, url)
+        if not os.path.exists(path):
+            print(f"==> Downloading {name} to {cache_dir}", flush=True)
+            os.makedirs(cache_dir, exist_ok=True)
+            _download(url, path + ".part", name, progress)
+            if _md5(path + ".part") != md5:
+                os.remove(path + ".part")
+                raise RuntimeError(f"Downloaded {name} is corrupt, please try again.")
+            os.replace(path + ".part", path)
+            _record_source(path, url)
+        paths.append(path)
+    return paths
+
+
+def _recorded_source(path):
+    """URL a checkpoint was downloaded from (saved next to it), or None if unknown."""
+    try:
+        with open(path + ".url") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def _record_source(path, url):
+    if _recorded_source(path) == url:
+        return
+    try:
+        with open(path + ".url", "w") as f:
+            f.write(url + "\n")
+    except OSError:
+        pass  # read-only folder: the checkpoint is still used
+
+
+def _md5(path):
+    digest = hashlib.md5()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 24):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download(url, path, name, progress=None, connections=None, retries=5):
+    """
+    Download url to path in parallel parts (HTTP range requests), retrying each
+    part from where it stopped. Falls back to one connection if the server does
+    not support ranges. Reports progress(fraction, message), or prints it.
+    """
+    connections = max(1, connections or DOWNLOAD_CONNECTIONS)
+    # Size, and whether ranges work: ask for the first byte.
+    with urllib.request.urlopen(
+        urllib.request.Request(url, headers={"Range": "bytes=0-0"}), timeout=60
+    ) as response:
+        content_range = response.headers.get("Content-Range", "")
+        if response.status == 206 and "/" in content_range:
+            total = int(content_range.rsplit("/", 1)[1])
+        else:
+            total, connections = int(response.headers.get("Content-Length", 0)), 1
+    if not total:
+        connections = 1
+    part_size = -(-total // connections) if total else 0
+    parts = [(i * part_size, min(total, (i + 1) * part_size) - 1) for i in range(connections)]
+    with open(path, "wb") as f:
+        f.truncate(total)
+    received = [0]
+    lock = threading.Lock()
+    failed = threading.Event()
+
+    def fetch(start, end):
+        position, attempt = start, 0
+        while total == 0 or position <= end:
+            headers = {} if total == 0 else {"Range": f"bytes={position}-{end}"}
+            try:
+                request = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(request, timeout=60) as response, open(path, "r+b") as f:
+                    if headers and response.status != 206:
+                        raise RuntimeError(f"the server ignored the download range for {name}")
+                    f.seek(position)
+                    while chunk := response.read(1 << 20):
+                        if failed.is_set():
+                            return
+                        f.write(chunk)
+                        position += len(chunk)
+                        with lock:
+                            received[0] += len(chunk)
+                if total == 0:
+                    return
+            except (OSError, urllib.error.URLError, http.client.HTTPException) as e:
+                attempt += 1
+                if attempt > retries or failed.is_set():
+                    raise RuntimeError(f"Could not download {name}: {e}") from e
+                time.sleep(min(30, 2 * attempt))
+
+    started = time.monotonic()
+    last_print = 0.0
+    tty = sys.stdout.isatty()
+
+    def report(final=False):
+        nonlocal last_print
+        done, elapsed = received[0], max(time.monotonic() - started, 1e-6)
+        speed = done / elapsed / 1e6
+        fraction = done / total if total else 0.0
+        message = f"Downloading {name} ({done >> 20} / {total >> 20} MB, {speed:.1f} MB/s)"
+        if progress is not None:
+            progress(fraction, message)
+        elif tty:
+            print(f"\r    {done >> 20} / {total >> 20} MB ({100 * fraction:.0f}%), {speed:.1f} MB/s   ",
+                  end="\n" if final else "", flush=True)
+        elif final or time.monotonic() - last_print >= 10:
+            # Not a terminal (e.g. the installer run by a plugin): a line every 10 s.
+            last_print = time.monotonic()
+            print(f"    {done >> 20} / {total >> 20} MB ({100 * fraction:.0f}%), {speed:.1f} MB/s", flush=True)
+
+    with ThreadPoolExecutor(max_workers=len(parts)) as pool:
+        futures = [pool.submit(fetch, start, end) for start, end in parts]
+        try:
+            while not all(future.done() for future in futures):
+                time.sleep(0.5)
+                report()
+                for future in futures:
+                    if future.done() and future.exception():
+                        raise future.exception()
+        except BaseException:
+            failed.set()  # stop the other parts
+            raise
+    report(final=True)
+    if total and received[0] != total:
+        raise RuntimeError(f"Could not download {name}: incomplete ({received[0]} of {total} bytes).")
+
+
+def segment(
+    tomogram_data,
+    normalize_method="min_max_positive_values",
+    split_processing=False,
+    stage1_prompt="grid_zero",
+    stage2_prompt="zero",
+    progress=None,
+):
+    """
+    Run ETSAM on a (Z, Y, X) tomogram array and return the stage-2 logits.
+
+    progress(fraction, message) is called after each slice; raise from it to cancel.
+    """
+    stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    grid_interval = 10 if split_processing else 50
+    tomogram_data = np.array(tomogram_data, dtype=np.float32)
+
+    print(f"==> Normalizing tomogram data with {normalize_method} method")
+    if normalize_method == "min_max_positive_values":
+        normalized_tomogram_data = min_max_postive_values_normalize(tomogram_data)
+    elif normalize_method == "softplus_minmax":
+        normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
+
+    if split_processing:
+        quadrants = split_into_quadrants(normalized_tomogram_data)
+        quadrant_labels = ["top-left", "top-right", "bottom-left", "bottom-right"]
+        print(
+            f"==> Split tomogram into {len(quadrants)} sub-tomograms (split-processing mode, grid_interval={grid_interval})"
+        )
+        for label, (sub, (y0, y1, x0, x1)) in zip(quadrant_labels, quadrants):
+            print(f"    {label}: shape {sub.shape}, Y[{y0}:{y1}] X[{x0}:{x1}]")
+    else:
+        quadrants = [(normalized_tomogram_data, None)]
+        quadrant_labels = [""]
+
+    quadrant_results = []
+    for i, (label, (sub_tomogram, coords)) in enumerate(zip(quadrant_labels, quadrants)):
+        if split_processing:
+            print(f"\n==> Processing quadrant: {label}")
+
+        def slice_progress(stage, done, total):
+            if progress is not None:
+                prefix = f"Quadrant {i + 1}/4 · " if split_processing else ""
+                fraction = (2 * i + stage - 1 + done / total) / (2 * len(quadrants))
+                progress(fraction, f"{prefix}Stage {stage} · slice {done}/{total}")
+
+        q_logits = run_two_stage_inference_on_tomogram(
+            sub_tomogram,
+            CONFIG,
+            stage1_ckpt_path,
+            stage2_ckpt_path,
+            stage1_prompt,
+            stage2_prompt,
+            grid_interval=grid_interval,
+            stage1_logit_threshold=-0.25,
+            device=device,
+            progress=slice_progress,
+        )
+        quadrant_results.append((q_logits, coords))
+
+    if not split_processing:
+        return quadrant_results[0][0]
+    print("\n==> Combining quadrant logits into full volume")
+    return combine_quadrant_logits(quadrant_results, tomogram_data.shape)
+
+
+def _version():
+    """Installed version of ETSAM (the installer and pip/conda installs all record it)."""
+    try:
+        return importlib.metadata.version("etsam")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown (ETSAM is not installed with pip)"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="etsam",
+        usage="etsam [options] TOMOGRAM",
+        description="Segment cell membranes in a cryo-ET tomogram (.mrc) with ETSAM.",
+        epilog="Documentation: https://jianlin-cheng.github.io/ETSAM/",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=24),
+    )
+    parser.add_argument(
+        "input_tomogram_file_path", metavar="TOMOGRAM", help="input tomogram (.mrc)"
+    )
+    parser.add_argument(
+        "-V", "--version", action="version", version=f"etsam {_version()}", help="show the version and exit"
+    )
+    output = parser.add_argument_group("output")
+    output.add_argument(
+        "--output-dir", metavar="DIR", default="./",
+        help="folder for the results (default: current folder)",
+    )  # fmt: skip
+    output.add_argument(
+        "--logit-threshold", metavar="T", type=float, default=-0.25,
+        help="logit threshold for the mask (default: -0.25)",
+    )  # fmt: skip
+    output.add_argument(
+        "--store-logits", action="store_true",
+        help="also save the logits (membrane scores)",
+    )  # fmt: skip
+    segmentation = parser.add_argument_group("segmentation")
+    segmentation.add_argument(
+        "--split-processing", action="store_true",
+        help="segment the 4 Y/X quadrants separately",
+    )  # fmt: skip
+    segmentation.add_argument(
+        "--normalize-method", metavar="M", default="min_max_positive_values",
+        choices=["min_max_positive_values", "softplus_minmax"],
+        help="min_max_positive_values (default), softplus_minmax",
+    )  # fmt: skip
+    segmentation.add_argument(
+        "--stage1-prompt", metavar="P", default="grid_zero",
+        choices=["zero", "grid", "grid_zero"],
+        help="zero, grid, grid_zero (default)",
+    )  # fmt: skip
+    segmentation.add_argument(
+        "--stage2-prompt", metavar="P", default="zero",
+        choices=["zero", "grid", "grid_zero", "etsam_stage1_partial"],
+        help="zero (default), grid, grid_zero, etsam_stage1_partial",
+    )  # fmt: skip
+    postprocess.add_postprocess_arguments(parser.add_argument_group("post-processing"))
 
     args = parser.parse_args()
-    stage1_ckpt_path = "checkpoints/etsam_stage1_v1.pt"
-    stage2_ckpt_path = "checkpoints/etsam_stage2_v1.pt"
-    config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
     stage1_prompt = args.stage1_prompt
     stage2_prompt = args.stage2_prompt
     store_logits = args.store_logits
-    stage1_logit_threshold = -0.25
     stage2_logit_threshold = args.logit_threshold
     split_processing = args.split_processing
-    grid_interval = 10 if split_processing else 50
     input_tomogram_file_path = os.path.abspath(args.input_tomogram_file_path)
     output_dir = os.path.abspath(args.output_dir)
     normalize_method = args.normalize_method
@@ -185,14 +441,10 @@ if __name__ == "__main__":
         with mrcfile.open(input_tomogram_file_path) as mrc:
             voxel_size = mrc.voxel_size
             input_tomogram_shape = mrc.data.shape
-            tomogram_data = mrc.data.astype(np.float32)
+            tomogram_data = mrc.data.copy()
+        if not torch.cuda.is_available():
+            print("Warning: no CUDA GPU found, running on the CPU (very slow)")
         print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
-
-        print(f"==> Normalizing tomogram data with {normalize_method} method")
-        if normalize_method == "min_max_positive_values":
-            normalized_tomogram_data = min_max_postive_values_normalize(tomogram_data)
-        elif normalize_method == "softplus_minmax":
-            normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
 
         if split_processing:
             output_mask_file_path = os.path.join(
@@ -207,32 +459,6 @@ if __name__ == "__main__":
                 output_dir,
                 f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_split_processing_post_processed_mask.mrc",
             )
-
-            quadrants = split_into_quadrants(normalized_tomogram_data)
-            quadrant_labels = ["top-left", "top-right", "bottom-left", "bottom-right"]
-            print(
-                f"==> Split tomogram into {len(quadrants)} sub-tomograms (split-processing mode, grid_interval={grid_interval})"
-            )
-            for label, (sub, (y0, y1, x0, x1)) in zip(quadrant_labels, quadrants):
-                print(f"    {label}: shape {sub.shape}, Y[{y0}:{y1}] X[{x0}:{x1}]")
-
-            quadrant_results = []
-            for label, (sub_tomogram, coords) in zip(quadrant_labels, quadrants):
-                print(f"\n==> Processing quadrant: {label}")
-                q_logits = run_two_stage_inference_on_tomogram(
-                    sub_tomogram,
-                    config,
-                    stage1_ckpt_path,
-                    stage2_ckpt_path,
-                    stage1_prompt,
-                    stage2_prompt,
-                    grid_interval=grid_interval,
-                    stage1_logit_threshold=stage1_logit_threshold,
-                )
-                quadrant_results.append((q_logits, coords))
-
-            print("\n==> Combining quadrant logits into full volume")
-            logits = combine_quadrant_logits(quadrant_results, input_tomogram_shape)
         else:
             output_mask_file_path = os.path.join(
                 output_dir,
@@ -247,16 +473,13 @@ if __name__ == "__main__":
                 f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc",
             )
 
-            logits = run_two_stage_inference_on_tomogram(
-                normalized_tomogram_data,
-                config,
-                stage1_ckpt_path,
-                stage2_ckpt_path,
-                stage1_prompt,
-                stage2_prompt,
-                grid_interval=grid_interval,
-                stage1_logit_threshold=stage1_logit_threshold,
-            )
+        logits = segment(
+            tomogram_data,
+            normalize_method,
+            split_processing,
+            stage1_prompt,
+            stage2_prompt,
+        )
 
         mask = (logits > stage2_logit_threshold).astype(np.uint8)
 
@@ -285,3 +508,7 @@ if __name__ == "__main__":
 
     except Exception as e:
         print("Error: " + str(e))
+
+
+if __name__ == "__main__":
+    main()

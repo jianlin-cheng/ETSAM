@@ -22,20 +22,11 @@ import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
   <div class="hero-quickstart">
     <p class="eyebrow">quick start</p>
     ```bash
-    # 1. Clone the repository
-    git clone https://github.com/jianlin-cheng/ETSAM
-    cd ETSAM
+    # 1. Install ETSAM (Linux, NVIDIA GPU; for Windows, see Installation)
+    curl -fsSL https://jianlin-cheng.github.io/ETSAM/install.sh | sh
 
-    # 2. Download model weights
-    wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage1_v1.pt
-    wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage2_v1.pt
-
-    # 3. Create and activate the conda environment
-    conda env create -f environment.yml
-    conda activate etsam
-
-    # 4. Run ETSAM on a tomogram
-    python etsam.py input_tomogram.mrc --output-dir results/
+    # 2. Run ETSAM on a tomogram, in a new terminal
+    etsam input_tomogram.mrc --output-dir results/
     ```
   </div>
 </section>

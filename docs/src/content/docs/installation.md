@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Install ETSAM via conda or Dev Containers, download model weights, and verify the environment.
+description: Install ETSAM with the installer, a conda environment or a Dev Container, get the model weights, and verify the setup.
 prev:
   label: Overview
   link: /ETSAM/
@@ -9,23 +9,29 @@ next:
   link: /ETSAM/tutorial/
 ---
 
-Set up ETSAM on your system. ETSAM can be installed in two ways: directly from the terminal using conda, or as a reproducible [Dev Container](https://containers.dev/). Installation typically takes 5-15 minutes depending on internet speed and package cache state.
+ETSAM provides the `etsam` command. There are three ways to install it:
+
+- **[ETSAM installer](#method-1-etsam-installer-recommended)** (recommended): a single download that sets up ETSAM, its dependencies and checkpoints in their own conda environment.
+- **[Conda environment from source](#method-2-conda-environment-from-source)**: Clone git repo and install conda environment manually. Use this if you also want to modify, train or evaluate ETSAM.
+- **[Dev Container](#method-3-dev-container)**: a reproducible Docker environment with everything preinstalled.
+
+Installation typically takes 5–15 minutes, mostly spent downloading conda environment dependencies and model checkpoints.
 
 ## Requirements
 
 ### Hardware
 
 - NVIDIA GPU with at least 2 GB VRAM; 4 GB VRAM is recommended.
-- At least 24 GB CPU RAM; 32 GB is recommended.
+- At least 16 GB CPU RAM; 32 GB is recommended. Peak memory grows with tomogram size: a 360 × 928 × 960 tomogram needs about 9 GB.
+- About 6 GB of disk space for PyTorch and the 1.9 GB of model weights.
+
+### Supported Platforms
+
+ETSAM supports **Linux and Windows with an NVIDIA GPU** (tested on Fedora 43, Arch Linux and Windows 11).
 
 :::note
-AMD GPUs may work, but might require an [AMD-specific PyTorch](https://pytorch.org/get-started/locally/) installation inside the `etsam` conda environment. This is currently untested.
+Other configurations (macOS, AMD or Intel GPUs) may work, but require testing by users; contributions are welcome. For example, AMD GPUs may work with an [AMD specific PyTorch](https://pytorch.org/get-started/locally/) installed in the etsam environment by the conda constructor installer post-script: [installer/post_install.sh](installer/post_install.sh).
 :::
-
-### Operating System
-
-- Linux (tested on Fedora 43 and Arch Linux).
-- Windows may work, but is currently untested.
 
 ### Tested Setup
 
@@ -33,72 +39,103 @@ AMD GPUs may work, but might require an [AMD-specific PyTorch](https://pytorch.o
 - NVIDIA GeForce RTX 4070 with 12 GB VRAM
 - 32 GB DDR5 CPU RAM
 - NVIDIA CUDA 13.0 and driver version 580.119.02
-- conda 25.11.0
 
-## Get the Code
+## Method 1: ETSAM Installer (recommended)
 
-Download the project as a [ZIP archive](https://github.com/jianlin-cheng/ETSAM/archive/refs/heads/main.zip) and extract **ETSAM-main.zip** into a preferred folder, or clone it from the terminal:
+It installs ETSAM in a separate python environment with dependencies and model checkpoints required to run it. Everything goes into one folder (Linux: `~/etsam_env`, Windows: `%USERPROFILE%\etsam_env`). It also makes the `etsam` and `etsam-postprocess` commands available in new terminals thereafter by adding them to the PATH.
+
+### 1. Install ETSAM
+
+On Linux, run in a terminal:
+
+```bash
+curl -fsSL https://jianlin-cheng.github.io/ETSAM/install.sh | sh
+```
+
+On Windows, run in PowerShell:
+
+```powershell
+irm https://jianlin-cheng.github.io/ETSAM/install.ps1 | iex
+```
+
+The script asks for the installation folder and shows the default one; press Enter to accept it. (Set `ETSAM_PREFIX` to choose the folder beforehand, or `ETSAM_YES=1` to skip all questions.)
+
+You can also download the installer manually from the [latest release](https://github.com/jianlin-cheng/ETSAM/releases/latest) and run it with `bash ETSAM-<version>-Linux-x86_64.sh`, or double-click the `ETSAM-<version>-Windows-x86_64.exe` to install it.
+
+### 2. Run ETSAM
+
+**_Open a new terminal_** and run the following. 
+```bash
+etsam input_tomogram.mrc --output-dir results/
+```
+
+If `etsam` is not found, try opening new terminal or log out and log in again, then try once more.
+
+Run `etsam --version` to see which version is installed (this works with every installation method).
+
+### 3. Uninstall ETSAM
+
+To uninstall:
+
+- On Linux, delete the `etsam_env` folder (`rm -r ~/etsam_env`) and the lines marked "added by the ETSAM installer" in `~/.profile`, `~/.bashrc` and `~/.zshrc` (and `~/.config/fish/conf.d/etsam.fish`, if you use fish shell). 
+
+- On Windows, use the uninstaller (`Uninstall-ETSAM.exe`) in the `%USERPROFILE%\etsam_env` installation folder.
+
+### Upgrade or Reinstall ETSAM
+
+Run the same install command again. The script finds the existing installation (through the conda environment list `~/.conda/environments.txt` and the `.etsam-installer` file in the installation folder), tells you which version is installed, and asks what to do:
+
+- **Upgrade**, if the latest release is newer. On Linux the installation is updated in place; on Windows, whose installer cannot update a folder in place, the old installation is uninstalled and the new one installed.
+- **Reinstall**, if you already have the latest version (to repair a broken installation, for example). The old installation is removed and installed again.
+
+The downloaded model weights (`checkpoints/`) are kept in both cases, without copying them or using extra disk space. They are downloaded again only if the download URL of the weights changed in the new version. Close ChimeraX, napari and other programs that use ETSAM first. To skip the question (in scripts), set `ETSAM_YES=1`.
+
+## Method 2: Conda Environment from Source
+
+Use this method if you also want to modify, [train](/ETSAM/training/) or [evaluate](/ETSAM/evaluation/) ETSAM.
+
+### Requirements
+
+- `conda`, preferably installed through [Miniforge](https://conda-forge.org/download/). Tested with conda 25.11.0.
+
+### 1. Get the Code
+
+Download the project as a [ZIP archive](https://github.com/jianlin-cheng/ETSAM/archive/refs/heads/main.zip) and extract **ETSAM-main.zip** into a preferred folder, or git clone it from the terminal:
 
 ```bash
 git clone https://github.com/jianlin-cheng/ETSAM
 cd ETSAM
 ```
 
-## Method 1: Installation Using the Terminal
+### 2. Create and Activate the Conda Environment
 
-This installs ETSAM into a dedicated conda environment on your host machine.
+```bash
+conda env create -f environment.yml
+conda activate etsam
+```
 
-### Software Requirements
-
-- `conda`, preferably installed through [Miniforge](https://conda-forge.org/download/). It installs Python and the required package dependencies. Tested with conda 25.11.0.
-- A GPU compute stack such as NVIDIA CUDA or AMD ROCm, as needed to run PyTorch on the GPU. Tested with NVIDIA CUDA 13.0 and driver version 580.119.02.
-
-:::tip
-We recommend installing conda through [Miniforge](https://conda-forge.org/download/) for a fast, community-maintained conda distribution that defaults to conda-forge.
+:::note
+Environment creation usually takes 5–10 minutes. It installs PyTorch with CUDA support from conda-forge, matched to your NVIDIA driver.
 :::
 
-### 1. Download Model Weights
+### 3. Install the ETSAM Package
+```bash
+pip install --no-deps -e .
+```
 
-Download the pre-trained ETSAM Stage 1 and Stage 2 checkpoints from Zenodo:
-
+:::note
+The model weights download automatically on first use. You can also download them and place the checkpoints in `checkpoints/` folder inside the cloned/downloaded repository folder:
 ```bash
 wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage1_v1.pt
 wget -P checkpoints/ https://zenodo.org/records/17571925/files/etsam_stage2_v1.pt
 ```
-
-The weights are saved in `checkpoints/`. ETSAM uses these paths by default.
-
-### 2. Create the Conda Environment
-
-Use the provided `environment.yml` to create a dedicated environment with the Python dependencies:
-
-```bash
-conda env create -f environment.yml
-```
-
-:::note
-Environment creation usually takes 5-10 minutes. This installs PyTorch, SAM2-related dependencies, and the required cryo-ET processing packages. Installation time may vary based on your internet speed.
 :::
 
-### 3. Activate the Environment
+You need to activate ETSAM conda environment each time with: `conda activate etsam` before using `etsam` command or running `python etsam.py <>` directly from the repository folder.
 
-```bash
-conda activate etsam
-```
+## Method 3: Dev Container
 
-You should see `(etsam)` at the beginning of your terminal prompt when the environment is active.
-
-### 4. Verify the Installation
-
-Run the help command to confirm ETSAM can be imported and executed:
-
-```bash
-python etsam.py --help
-```
-
-## Method 2: Installation Using Dev Containers
-
-A [Dev Container](https://containers.dev/) is a reproducible way to run ETSAM. It builds the conda environment into a Docker image and downloads the model weights for you, so no manual environment setup or weight download is needed. This keeps the environment consistent across different systems.
+A [Dev Container](https://containers.dev/) builds the conda environment from Method 2 into a Docker image and downloads the model weights into `checkpoints/` for you. This keeps the environment identical across systems. Use this if you are finding it hard to get it working in your particular Linux distro or Windows.
 
 ### Software Requirements
 
@@ -106,17 +143,19 @@ A [Dev Container](https://containers.dev/) is a reproducible way to run ETSAM. I
 - Either VS Code with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers), or the [`devcontainer` CLI](https://github.com/devcontainers/cli).
 
 :::tip[Data Location]
-When using Dev Containers, place your input tomogram data into the **data/** directory and store output segmentations in **results/**, as these directories are shared between the host and container.
+Place your input tomograms in **data/** and write output segmentations to **results/**. These folders are shared between the host and the container.
+:::
+
+:::note[Running ETSAM in the container]
+The container runs ETSAM from the source folder. Use `python etsam.py` wherever this documentation uses `etsam`, and `python postprocess.py` for `etsam-postprocess`. They take exactly the same arguments.
 :::
 
 ### Option A: VS Code
 
 1. Open the ETSAM folder and choose **Reopen in Container** (command palette → *Dev Containers: Reopen in Container*).
    - The first run takes time to download the container image, install the conda environment, and download the checkpoints. Subsequent opens are instant.
-2. The VS Code editor and its integrated terminal then run **inside** the container, giving you access to everything needed to run ETSAM.
+2. The VS Code editor and its integrated terminal now run **inside** the container.
 3. Run `nvidia-smi` in the VS Code terminal to confirm the NVIDIA GPU is accessible inside the container.
-
-Continue to the [Tutorial](/ETSAM/tutorial/) section to learn how to run ETSAM.
 
 ### Option B: Dev Container CLI
 
@@ -126,32 +165,35 @@ Start (and, on first run, build) the container:
 devcontainer up
 ```
 
-`devcontainer up` only starts the container — it does not give you a shell. Open one inside it with:
+`devcontainer up` only starts the container; it does not give you a shell. Open one inside it with:
 
 ```bash
 devcontainer exec bash
 ```
 
-You are now inside the container, and everything including the `data/` folder is available. Continue to the [Tutorial](/ETSAM/tutorial/) section to learn how to run ETSAM.
+You are now inside the container, with the `data/` folder available.
 
-## Repository Structure
+## Model Weights
 
-After installation, the repository should look like this:
+ETSAM looks for the checkpoints `etsam_stage1_v1.pt` and `etsam_stage2_v1.pt` in this order:
 
-```text
-ETSAM/
-|-- etsam.py                  # Main inference script
-|-- environment.yml           # Conda environment spec
-|-- checkpoints/
-|   |-- etsam_stage1_v1.pt    # Stage 1 model weights
-|   |-- etsam_stage2_v1.pt    # Stage 2 model weights
-|-- sam2/                     # Modified SAM2 source code
-|-- training/                 # Training scripts
-|-- evaluation/               # Evaluation scripts
-|-- scripts/                  # Data collection utilities
-|-- data/                     # Data directory created by the user
-```
+1. `checkpoints/` next to `etsam.py`, i.e. in the ETSAM source folder,
+2. `checkpoints/` in the environment's folder, where the [ETSAM installer](#method-1-etsam-installer-recommended) puts them (`~/etsam_env/checkpoints`),
+3. the folder in the `ETSAM_CHECKPOINT_DIR` environment variable, or `~/.cache/etsam` if that variable is not set.
+
+Missing weights are downloaded into the last location the first time ETSAM runs.
+
+## Installed Commands
+
+| Command | Purpose |
+| --- | --- |
+| `etsam` | Segment membranes in a tomogram. See the [Tutorial](/ETSAM/tutorial/). |
+| `etsam-postprocess` | Clean up an existing mask. See [Advanced Usage](/ETSAM/advanced/). |
+
+Run any command with `--help` for all its options.
 
 :::tip
 Running into installation problems? See the [Troubleshooting](/ETSAM/troubleshooting/) page for common issues and fixes.
 :::
+
+Continue to the [Tutorial](/ETSAM/tutorial/) to segment your first tomogram.

@@ -16,26 +16,52 @@ Cryogenic Electron Tomography (cryo-ET) is an emerging experimental technique to
 ## Hardware Requirements
 <ins>ETSAM requires:</ins>
 - a NVIDIA GPU with atleast 2GB VRAM, 4GB VRAM recommended. 
-- atleast 24GB CPU RAM, recommended 32GB.
+- atleast 16GB CPU RAM, recommended 32GB.
 
 <ins>Tested on</ins>
 - Intel® Core™ i7-14700K
 - NVIDIA GeForce RTX 4070 with 12GB VRAM
 - 32 GB DDR5 CPU RAM
 
-_(AMD GPUs may work, but might require [AMD specific pytorch](https://pytorch.org/get-started/locally/) installation inside the etsam conda environment. Untested.)_
+## Supported Platforms
+ETSAM supports **Linux and Windows with an NVIDIA GPU** (tested on Fedora 43, Arch Linux and Windows 11).
 
-## Operating System
-- Linux (Tested in Fedora 43 and Arch Linux)
-- Windows (may work, but Untested)
+_Other configurations (macOS, AMD or Intel GPUs) may work, but require testing by users; contributions are welcome. For example, AMD GPUs may work with an [AMD specific PyTorch](https://pytorch.org/get-started/locally/) installed in the etsam environment by the conda constructor installer post-script: [installer/post_install.sh](installer/post_install.sh)._
 
 # Installation 
-Detailed instructions to install ETSAM is available in https://jianlin-cheng.github.io/ETSAM/installation.
+Install ETSAM with one command. 
+
+On Linux:
+```bash
+curl -fsSL https://jianlin-cheng.github.io/ETSAM/install.sh | sh
+```
+On Windows, in PowerShell:
+```powershell
+irm https://jianlin-cheng.github.io/ETSAM/install.ps1 | iex
+```
+It installs ETSAM in a separate python environment with dependencies and model checkpoints required to run it. Everything goes into one folder (Linux: `~/etsam_env`, Windows: `%USERPROFILE%\etsam_env`). It also makes the `etsam` command available in new terminals thereafter. Detailed instructions and various other installation methodologies are available in https://jianlin-cheng.github.io/ETSAM/installation.
 
 # Usage
-We have provided detailed tutorial on how to use ETSAM in https://jianlin-cheng.github.io/ETSAM/tutorial/. 
+### CLI
+```bash
+etsam input_tomogram.mrc --output-dir results/
+```
+We have provided detailed tutorial on how to use ETSAM CLI in https://jianlin-cheng.github.io/ETSAM/tutorial/. 
 
-Information on advanced usage of ETSAM is available here: https://jianlin-cheng.github.io/ETSAM/advanced/
+Information on advanced usage of ETSAM CLI is available here: https://jianlin-cheng.github.io/ETSAM/advanced/
+
+### UCSF ChimeraX Plugin
+- In ChimeraX, open **Tools ▸ More Tools…**, search for **ETSAM** and click **Install**. 
+- Once installed Open **Tools ▸ Volume Data ▸ ETSAM Membrane Segmentation** to select and segment an loaded tomogram volume.
+
+You can read more about installing and how to use the ChimeraX plugin over here: https://jianlin-cheng.github.io/ETSAM/chimerax/
+
+### Napari Plugin
+- In napari, open **Plugins ▸ Install/Uninstall Plugins…**.
+- Search for **ETSAM**, click **Install** next to *napari-etsam*, and restart napari.
+
+You can read more about installing and how to use the ChimeraX plugin over here: https://jianlin-cheng.github.io/ETSAM/napari/
+
 
 # Training and Evaluation
 Refer [Training](https://jianlin-cheng.github.io/ETSAM/training) and [Evaluation](https://jianlin-cheng.github.io/ETSAM/evaluation) section of the documentation for more details.

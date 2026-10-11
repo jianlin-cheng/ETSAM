@@ -14,6 +14,10 @@ from argparse import ArgumentParser
 # import submitit
 import torch
 
+# Make the repository root importable so `training` and `sam2` resolve when this
+# script is run directly (python training/train.py ...).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from hydra import compose, initialize_config_module
 from hydra.utils import instantiate
 

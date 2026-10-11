@@ -1,0 +1,57 @@
+# ETSAM installer, built with conda constructor (https://conda.github.io/constructor/).
+# Build instructions: README.md. CI: .github/workflows/installer.yml.
+#
+# The installer contains ETSAM and its dependencies except PyTorch; the
+# post-install script adds the PyTorch build for the GPU. Currently NVIDIA GPUs
+# on Linux and Windows (x86-64) are supported.
+name: ETSAM
+version: {{ environ.get("ETSAM_VERSION", "1.1.0") }}
+company: ETSAM
+
+channels:
+  # Local channel with the etsam package built from recipe/ (see README.md).
+  - {{ environ["ETSAM_CHANNEL"] }}
+  - conda-forge
+
+specs:
+  - python 3.12.*
+  - conda        # used by the post-install script to add PyTorch
+  - etsam {{ environ.get("ETSAM_VERSION", "1.1.0") }}
+
+# The file names carry the version (ETSAM-1.2.3-Linux-x86_64.sh), also on the GitHub release.
+installer_filename: ETSAM-{{ environ.get("ETSAM_VERSION", "1.1.0") }}-Linux-x86_64.sh      # [linux64]
+installer_filename: ETSAM-{{ environ.get("ETSAM_VERSION", "1.1.0") }}-Windows-x86_64.exe   # [win64]
+installer_type: sh     # [linux]
+installer_type: exe    # [win]
+
+default_prefix: ${HOME}/etsam_env              # [linux]
+default_prefix: '%USERPROFILE%\etsam_env'      # [win]
+
+pre_install: pre_install.sh     # [unix]
+pre_install: pre_install.bat    # [win]
+post_install: post_install.sh   # [unix]
+post_install: post_install.bat  # [win]
+pre_uninstall: pre_uninstall.bat  # [win]
+
+license_file: ../LICENSE
+
+# Record the environment in ~/.conda/environments.txt ("conda env list"), which
+# is how the ETSAM plugins find it. Do not initialize conda or put the
+# environment on the PATH: the post-install scripts create commands/, with only
+# the etsam commands, and add that folder to the PATH.
+register_envs: true
+initialize_conda: false
+initialize_by_default: false
+register_python: false
+register_python_default: false
+
+# Windows: uninstall with the installer's own conda (_conda.exe). The default
+# uninstaller first runs "conda init --reverse" with the environment's conda,
+# which fails here ("needs sudo ... Scripts\conda.exe", for the same reason as
+# in post_install.bat), and the uninstaller then stops without removing anything.
+uninstall_with_conda_exe: true
+
+# Later "conda install" in this environment uses conda-forge only.
+condarc:
+  channels:
+    - conda-forge

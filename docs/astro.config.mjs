@@ -45,11 +45,11 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/joelselvaraj/ETSAM',
+          href: 'https://github.com/jianlin-cheng/ETSAM',
         },
       ],
       editLink: {
-        baseUrl: 'https://github.com/joelselvaraj/ETSAM/edit/main/docs/',
+        baseUrl: 'https://github.com/jianlin-cheng/ETSAM/edit/main/docs/',
       },
       tableOfContents: {
         minHeadingLevel: 2,
@@ -67,6 +67,8 @@ export default defineConfig({
           label: 'Guides',
           items: [
             { label: 'Tutorial', slug: 'tutorial' },
+            { label: 'napari Plugin', slug: 'napari' },
+            { label: 'ChimeraX Plugin', slug: 'chimerax' },
             { label: 'Advanced Usage', slug: 'advanced' },
             { label: 'Training', slug: 'training' },
             { label: 'Evaluation', slug: 'evaluation' },

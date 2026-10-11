@@ -208,3 +208,10 @@ etsam_logs/
 **/wandb/
 
 mamba*
+
+# ETSAM installer build output
+installer/build/
+
+# Documentation site (Astro): installed packages and generated cache
+docs/node_modules/
+docs/.astro/

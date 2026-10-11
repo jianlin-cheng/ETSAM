@@ -1,0 +1,19 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 21ac40a
+_src_path: gh:napari/napari-plugin-template
+display_name: napari-etsam
+email: jsbrq@missouri.edu
+full_name: Joel Selvaraj
+github_repository_url: provide later
+github_username_or_organization: jianlin-cheng
+include_reader_plugin: true
+include_sample_data_plugin: false
+include_widget_plugin: true
+include_writer_plugin: true
+install_dependabot: false
+install_precommit: false
+license: MIT
+module_name: napari_etsam
+plugin_name: napari-etsam
+short_description: Segment cell membranes in cryo-ET tomograms with ETSAM, inside
+    napari

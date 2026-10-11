@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tool: ETSAM Membrane Segmentation</title>
+<style>
+  body { font-family: sans-serif; max-width: 52em; margin: 1em auto; padding: 0 1em; line-height: 1.45; }
+  code { background: #f0f0f0; padding: 0 .25em; border-radius: 3px; }
+  pre { background: #f4f4f4; padding: .6em; overflow-x: auto; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #ccc; padding: .3em .5em; vertical-align: top; text-align: left; }
+</style>
+</head>
+<body>
+<h1>ETSAM Membrane Segmentation</h1>
+<p>
+ETSAM segments cell membranes in cryo-electron tomograms (<code>.mrc</code>, <code>.rec</code>,
+<code>.map</code>, <code>.mrcs</code>, <code>.st</code>, <code>.ali</code>). Open the tool from
+<b>Tools ▸ Volume Data ▸ ETSAM Membrane Segmentation</b>. The full documentation is at
+<a href="https://jianlin-cheng.github.io/ETSAM/chimerax/">jianlin-cheng.github.io/ETSAM/chimerax</a>.
+</p>
+
+<h2>First start: ETSAM is installed for you</h2>
+<p>
+ETSAM runs in its own environment, separate from ChimeraX. When you first open the tool, it looks for ETSAM and,
+if it is not installed, runs the
+<a href="https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended">ETSAM
+installer</a> in the background: ETSAM goes into <code>~/etsam_env</code> (on Windows,
+<code>%USERPROFILE%\etsam_env</code>), and PyTorch with CUDA support and the model weights are downloaded (about 5 GB). This takes a few
+minutes, once; the tool shows the progress. The installer supports NVIDIA GPUs on Linux and Windows. On other
+computers, install ETSAM yourself as described in
+<a href="https://jianlin-cheng.github.io/ETSAM/installation/#method-2-conda-environment-from-source">Installation ▸
+Conda Environment from Source</a>; the tool links to it.
+</p>
+<p>
+An existing installation is used as it is: an installer folder, or a conda environment named <code>etsam</code>.
+To use a specific environment, set the environment variable <code>ETSAM_PYTHON</code> to its Python before starting
+ChimeraX.
+</p>
+<p>
+If the model weights (1.9 GB) are missing, for example in an older conda environment, they are downloaded on the
+first run. When a run starts, the Log shows the device ETSAM uses.
+</p>
+
+<h2>Segmenting a tomogram</h2>
+<ol>
+  <li>Open a tomogram: click <b>Open…</b> in the tool, or use <b>File ▸ Open…</b>. It is selected as the
+      <b>Tomogram</b>; if several volumes are open, choose the one to segment.</li>
+  <li>Optionally, tick <b>Clean up mask</b> or <b>Closely spaced membranes</b> (see Options).</li>
+  <li>Click <b>Segment membranes</b>. The tool shows the stage, slice and time remaining. Click <b>Cancel</b> to
+      stop.</li>
+  <li>When it finishes, a <b>&lt;tomogram&gt; membranes</b> volume is added: the membrane scores (logits), shown as
+      a gold surface at the threshold.</li>
+  <li>Live threshold slider: adjusts the threshold at which predicted logits values are filtered, defaults to
+      −0.25. Move slider to dynamically filter the predicted mask at different logit thresholds. Can also be done
+      using the "Level" option in ChimeraX inbuilt Volume Viewer panel.</li>
+  <li>Save: nothing is written to disk until you click <b>Save mask…</b> (the mask at the current threshold) or
+      <b>Save logits…</b>. Files are <code>.mrc</code> with the tomogram's voxel size, with the same suggested
+      names as the <code>etsam</code> command, e.g. <code>TS_01_etsam_predicted_mask.mrc</code>.</li>
+</ol>
+
+<h3>Options</h3>
+<table>
+  <tr><th>Threshold</th><td>Binarization threshold of the stage 2 logits (default −0.25). Lower values find more
+      membrane; higher values give fewer false positives. It is the surface level of the result, adjustable live after a
+      run.</td></tr>
+  <tr><th>Closely spaced membranes</th><td>Segments the four quarters of the tomogram separately
+      (<i>split processing</i>); separates closely apposed membranes. About 4× slower.</td></tr>
+  <tr><th>Clean up mask</th><td>Removes thin noise and cuts short bridges between parallel membranes.</td></tr>
+  <tr><th>Advanced ▸ Normalization</th><td>Try <i>softplus_minmax</i> if membranes are missed with the
+      default.</td></tr>
+  <tr><th>Advanced ▸ Stage 1 / Stage 2 prompt</th><td>Prompting strategies; see the ETSAM documentation.</td></tr>
+</table>
+<p>These are the same options as in the ETSAM napari plugin.</p>
+
+<h2>When something goes wrong</h2>
+<p>
+If segmentation fails, the reason is shown in <span style="color:#d03030">red</span> below the options.
+<b>Show details</b> displays the full error, and <b>Copy error report</b> copies it for a bug report. Errors are
+also written to the Log.
+</p>
+<table>
+  <tr><th>Message</th><th>What to do</th></tr>
+  <tr><td>No tomogram selected</td><td>Open a tomogram first (<b>Open…</b> or <b>File ▸ Open</b>).</td></tr>
+  <tr><td>This volume cannot be segmented</td><td>ETSAM needs a 3D volume (Z, Y, X), not a 2D image.</td></tr>
+  <tr><td>ran out of memory / stopped by the operating system</td>
+      <td>ETSAM needs about 15–25 GB of RAM for a 1000×1000×500 tomogram. Close other programs, or bin the
+      tomogram.</td></tr>
+  <tr><td>Could not save …</td><td>The folder is read-only or the disk is full. Choose another folder.</td></tr>
+  <tr><td>The GPU is busy</td><td>Restart ChimeraX. If the message persists, close other programs that use
+      the GPU.</td></tr>
+  <tr><td>Installing ETSAM failed: … requires an NVIDIA GPU</td>
+      <td>The installer supports NVIDIA GPUs only. Install ETSAM yourself (see above).</td></tr>
+  <tr><td>Installing ETSAM failed: … the folder already exists</td>
+      <td>An earlier installation was interrupted. Delete the <code>etsam</code> folder in your home folder and
+      reopen the tool.</td></tr>
+  <tr><td>ETSAM is not installed</td>
+      <td>This computer is not supported by the installer. Install ETSAM yourself (see above), or set
+      <code>ETSAM_PYTHON</code>.</td></tr>
+  <tr><td>ETSAM is not installed in the environment …</td>
+      <td>That environment lacks ETSAM. Run step 3 of the conda installation (<code>pip install --no-deps -e .</code>
+      in the ETSAM folder).</td></tr>
+  <tr><td>no GPU available, although the computer has an NVIDIA GPU</td>
+      <td>Update the GPU driver, and check that PyTorch in the <code>etsam</code> environment can use the GPU.</td></tr>
+</table>
+<p>
+On Linux computers with an NVIDIA driver, the plugin starts ChimeraX's Log and Help panels without GPU
+acceleration, because with some NVIDIA drivers they otherwise keep ETSAM from using CUDA while ChimeraX is open.
+This does not affect ChimeraX's 3D graphics, and takes effect from the next ChimeraX start after the plugin is
+installed.
+</p>
+
+<h2>Commands</h2>
+<pre>etsam segment <i>maps</i> [threshold <i>value</i>] [split true|false] [cleanup true|false]
+              [normalization min_max_positive_values|softplus_minmax]
+              [stage1Prompt grid_zero|grid|zero] [stage2Prompt zero|grid|grid_zero|etsam_stage1_partial]
+etsam save <i>model</i> <i>path</i> [type mask|logits]
+etsam cancel</pre>
+<p>
+The tool's <b>Segment membranes</b> and <b>Save</b> buttons run these commands with the tool's settings, so
+they appear in the Log and can be repeated or copied into a script. <code>etsam segment</code> works on open volumes and adds the result as a new volume; nothing is saved
+automatically. <code>etsam save</code> saves the mask at the current threshold (or the logits), like the
+<b>Save</b> buttons. Options that are not given use the tool's current settings. For example:
+</p>
+<pre>open ~/data/TS_01.mrc
+etsam segment #1 cleanup true
+etsam save #2 ~/data/TS_01_mask.mrc</pre>
+
+<h2>Where files are stored</h2>
+<ul>
+  <li>ETSAM: <code>~/etsam_env</code> (on Windows, <code>%USERPROFILE%\etsam_env</code>) when installed by the tool or the installer; otherwise your <code>etsam</code> conda environment, or the Python in <code>ETSAM_PYTHON</code>.</li>
+  <li>Model weights (1.9 GB): <code>~/etsam_env/checkpoints</code> when installed by the installer; otherwise
+      <code>~/.cache/etsam</code>, or the folder set in the <code>ETSAM_CHECKPOINT_DIR</code> environment
+      variable.</li>
+</ul>
+</body>
+</html>

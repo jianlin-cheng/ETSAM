@@ -1,12 +1,21 @@
 name: Deploy Docs
 
+# Deploys the documentation to GitHub Pages for a release (release.yml runs this
+# workflow on main after creating the release) or when run by hand from the
+# Actions tab. Not on pushes, so that documentation for unreleased changes is
+# never published early.
 on:
-  push:
-    branches: [main]
-    paths:
-      - docs/**
-      - .github/workflows/deploy-docs.yml
   workflow_dispatch:
+  # TEMPORARY, until Settings > Pages > Source is set to "GitHub Actions": with
+  # the source set to "Deploy from a branch", GitHub's own "pages build and
+  # deployment" workflow publishes the main branch as it is on every push, which
+  # would replace the documentation site. Deploy the documentation again after
+  # it has finished, so that the documentation is what stays published. Once the
+  # source is "GitHub Actions", that workflow no longer runs, and this trigger
+  # can be removed.
+  workflow_run:
+    workflows: ["pages build and deployment"]
+    types: [completed]
 
 permissions:
   contents: read

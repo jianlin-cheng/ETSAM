@@ -1,0 +1,104 @@
+[project]
+name = "napari-etsam"
+dynamic = ["version"]
+description = "Segment cell membranes in cryo-ET tomograms with ETSAM, inside napari"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  {name = "Joel Selvaraj", email = "jsbrq@missouri.edu"},
+]
+keywords = ["napari", "cryo-ET", "tomography", "membrane segmentation", "SAM2"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: napari",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+requires-python = ">=3.11"
+# napari can be included in dependencies if napari imports are required.
+# However, you should not include napari[all], napari[qt],
+# or any other Qt bindings directly (e.g. PyQt5, PySide2).
+# See best practices: https://napari.org/stable/plugins/building_a_plugin/best_practices.html
+# ETSAM itself (PyTorch, SAM 2) is NOT a dependency of this package: it is installed
+# in its own environment by the ETSAM installer (or as a conda environment), and the
+# plugin runs it there, so it can never conflict with napari or other plugins
+# (see src/napari_etsam/etsam_env.py).
+dependencies = [
+    "mrcfile>=1.5",
+    "numpy",
+    "qtpy",
+    "superqt>=0.6",
+]
+
+[project.optional-dependencies]
+# Allow easily installation with the full, default napari installation
+# (including Qt backend) using napari-etsam[all].
+all = ["napari[all]"]
+
+[project.entry-points."napari.manifest"]
+napari-etsam = "napari_etsam:napari.yaml"
+
+[project.urls]
+Homepage = "https://github.com/jianlin-cheng/ETSAM"
+Documentation = "https://jianlin-cheng.github.io/ETSAM/napari/"
+"Bug Tracker" = "https://github.com/jianlin-cheng/ETSAM/issues"
+"Source Code" = "https://github.com/jianlin-cheng/ETSAM/tree/main/external_plugins/napari-etsam"
+
+[build-system]
+requires = ["setuptools>=77.0.3", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]
+
+# The plugin lives in a subfolder of the ETSAM repository; its version comes from
+# the repository's release tags (v1.2.3 -> 1.2.3).
+[tool.setuptools_scm]
+root = "../.."
+version_file = "src/napari_etsam/_version.py"
+fallback_version = "0.0.1+nogit"
+
+# Line length and quotes match the rest of ETSAM and the ChimeraX plugin, which
+# shares etsam_env.py, etsam_run.py and etsam_worker.py with this plugin.
+[tool.ruff]
+line-length = 100
+fix = true
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", #flake8
+    "UP", # pyupgrade
+    "I", # isort
+    "BLE", # flake8-blind-exception
+    "B", # flake8-bugbear
+    "A", # flake8-builtins
+    "C4", # flake8-comprehensions
+    "ISC", # flake8-implicit-str-concat
+    "G", # flake8-logging-format
+    "PIE", # flake8-pie
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # line too long. handled by formatter
+    "UP006", "UP007", # type annotation. As using magicgui require runtime type annotation then we disable this.
+]
