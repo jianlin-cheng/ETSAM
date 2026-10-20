@@ -25,10 +25,15 @@ from __future__ import annotations
 import json
 import os
 import platform
+import queue
+import threading
+import time
+from collections import deque
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 
 INSTALL_DOCS = "https://jianlin-cheng.github.io/ETSAM/installation/"
@@ -36,10 +41,15 @@ RELEASES = "https://github.com/jianlin-cheng/ETSAM/releases"
 ENV_NAME = "etsam"
 MARKER = ".etsam-installer"  # written by the installer's post-install script
 WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "etsam_worker.py")
+INSTALL_MESSAGE = (
+    "ETSAM is not installed. Click Install ETSAM to download and set it up. "
+    "This downloads about 5 GB and may take 10–15 minutes. "
+    "Keep the application open until installation finishes. "
+    "ETSAM requires Linux or Windows and an NVIDIA GPU. macOS is not supported."
+)
 NOT_FOUND = (
-    f"ETSAM is not installed (no '{ENV_NAME}' conda environment was found). Install it with "
-    f"the ETSAM installer, see {INSTALL_DOCS} , then try again. (To use a specific "
-    "environment, set ETSAM_PYTHON to its Python executable.)"
+    "ETSAM is not installed. ETSAM requires Linux or Windows and an NVIDIA GPU. "
+    "macOS is not supported."
 )
 
 
@@ -130,6 +140,19 @@ def latest_installer_url(platform_name: str) -> str:
         request = urllib.request.Request(f"{RELEASES}/latest", method="HEAD")
         with urllib.request.urlopen(request, timeout=60) as response:
             tag = response.url.rstrip("/").rsplit("/", 1)[-1]
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise RuntimeError(
+                f"The ETSAM release repository is unavailable at {RELEASES}. "
+                "It may be private, moved, or have no published release. "
+                "Automatic installation requires a publicly accessible release. "
+                "For a local installer, set ETSAM_INSTALLER to its file path before "
+                "starting the application."
+            ) from e
+        raise RuntimeError(
+            f"GitHub could not provide the latest ETSAM release (HTTP {e.code}). "
+            f"Check {RELEASES} or try again later."
+        ) from e
     except OSError as e:  # includes URLError
         raise RuntimeError(
             f"Could not find the latest ETSAM release ({e}). Check your internet connection."
@@ -183,17 +206,20 @@ def install(log=None, prefix: str | None = None) -> str:
         if installer.endswith(".exe"):
             # NSIS: /D must come last and must not be quoted.
             cmd = (
-                f'"{installer}" /S /InstallationType=JustMe /AddToPath=0 '
+                f'"{installer}" /S /Q /InstallationType=JustMe /AddToPath=0 '
                 f"/RegisterPython=0 /D={prefix}"
             )
         else:
             cmd = ["bash", installer, "-b", "-p", prefix]
-        _run(cmd, log)
+        _run(cmd, log, prefix=prefix)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     python = env_python(prefix)
-    if not os.path.exists(python):
-        raise RuntimeError(f"The ETSAM installer finished, but {python} does not exist.")
+    if not os.path.exists(python) or not os.path.isfile(os.path.join(prefix, MARKER)):
+        raise RuntimeError(
+            "The ETSAM installer exited without completing setup. "
+            f"See {os.path.join(prefix, '.step.log')} for details."
+        )
     return python
 
 
@@ -216,7 +242,9 @@ def _fetch(source: str, workdir: str, log) -> str:
     return path
 
 
-def _run(cmd, log) -> None:
+def _run(cmd, log, prefix=None) -> None:
+    # NSIS buffers script output until a step finishes. /Q prevents its own console;
+    # read .step.log as well so PyTorch and weight-download progress reaches the UI live.
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -226,17 +254,95 @@ def _run(cmd, log) -> None:
         errors="replace",
         **subprocess_options(),
     )
-    output = []
-    for line in proc.stdout:
-        line = line.rstrip()
-        if line:
-            output.append(line)
-            if log and line.startswith("ETSAM:"):  # the installer's own messages
-                message = line.split(":", 1)[1].strip()
-                log(message[:1].upper() + message[1:])
+    lines = queue.Queue()
+
+    def read_output():
+        try:
+            for line in proc.stdout:
+                lines.put(line)
+        finally:
+            lines.put(None)
+
+    threading.Thread(target=read_output, name="ETSAM installer output", daemon=True).start()
+    output = deque(maxlen=100)
+    started = last_update = time.monotonic()
+    last_message = "Installing ETSAM: extracting and preparing the environment"
+    step_path = os.path.join(prefix, ".step.log") if prefix and sys.platform == "win32" else None
+    step_file = None
+    step_pending = ""
+    stream_done = False
+    checkpoint_stage = None
+
+    def report(line):
+        nonlocal last_message, last_update, checkpoint_stage
+        line = line.strip()
+        if not line:
+            return
+        output.append(line)
+        if line.startswith("ETSAM:"):
+            checkpoint_stage = None
+            message = line.split(":", 1)[1].strip()
+            message = message[:1].upper() + message[1:]
+        elif line.startswith("==> Downloading"):
+            checkpoint_stage = next(
+                (stage for stage in (1, 2) if f"etsam_stage{stage}_" in line), None
+            )
+            message = (
+                f"Downloading ETSAM Stage {checkpoint_stage} of 2 Checkpoint: starting…"
+                if checkpoint_stage else line
+            )
+        elif "MB" in line and "%" in line:
+            message = (
+                f"Downloading ETSAM Stage {checkpoint_stage} of 2 Checkpoint: {line}"
+                if checkpoint_stage else line
+            )
+        elif line.startswith(("Collecting package metadata", "Solving environment",
+                              "Preparing transaction", "Executing transaction")):
+            message = line
+        else:
+            return
+        if message != last_message:
+            last_message, last_update = message, time.monotonic()
+            if log:
+                log(message)
+
+    if log:
+        log(last_message + "…")
+    try:
+        while not stream_done or proc.poll() is None:
+            try:
+                line = lines.get(timeout=1)
+                if line is None:
+                    stream_done = True
+                elif step_path is None:
+                    report(line)
+                else:
+                    output.append(line.rstrip())  # Windows progress comes from the live log
+            except queue.Empty:
+                pass
+            if step_path:
+                try:
+                    if step_file is None:
+                        step_file = open(step_path, encoding="utf-8", errors="replace")
+                    if os.path.getsize(step_path) < step_file.tell():
+                        step_file.seek(0)  # NSIS reuses the file for each installer step
+                        step_pending = ""
+                    step_pending += step_file.read()
+                    entries = step_pending.split(chr(10))
+                    step_pending = entries.pop()
+                    for entry in entries:
+                        report(entry)
+                except OSError:
+                    pass  # the log is created after extraction and may be locked briefly
+            if log and time.monotonic() - last_update >= 15:
+                elapsed = int(time.monotonic() - started)
+                log(f"{last_message} (setup running for {elapsed // 60}m {elapsed % 60:02d}s)")
+                last_update = time.monotonic()
+    finally:
+        if step_file is not None:
+            step_file.close()
+        proc.stdout.close()
     if proc.wait() != 0:
-        # The last informative line: an ETSAM message or an error (not the
-        # installer's generic "ERROR: executing post_install.sh failed").
         reasons = [
             line.split(":", 1)[1].strip() if line.startswith("ETSAM:") else line
             for line in output
@@ -244,7 +350,9 @@ def _run(cmd, log) -> None:
             and not line.startswith("ERROR: executing")
         ]
         summary = reasons[-1] if reasons else "see the details"
-        raise RuntimeError(f"The ETSAM installer failed: {summary}\n\n" + "\n".join(output[-25:]))
+        raise RuntimeError(
+            f"The ETSAM installer failed: {summary}\n\n" + "\n".join(list(output)[-25:])
+        )
 
 
 def subprocess_options() -> dict:

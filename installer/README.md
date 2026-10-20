@@ -1,3 +1,5 @@
+<img src="../ETSAM_icon.svg" alt="ETSAM membrane icon" width="200" height="160" />
+
 # ETSAM installer
 
 A self-contained installer for ETSAM, built with [conda constructor](https://conda.github.io/constructor/).

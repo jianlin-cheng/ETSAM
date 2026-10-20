@@ -31,7 +31,7 @@ categories = ["Volume Data"]
 classifiers = ["Development Status :: 5 - Production/Stable"]
 
 [chimerax.package-data]
-"src/docs" = ["*.html", "*.png"]
+"src/docs" = ["*.html", "*.png", "*.svg"]
 
 [chimerax.tool."ETSAM Membrane Segmentation"]
 category = "Volume Data"

@@ -16,8 +16,8 @@ import traceback
 import numpy as np
 
 from chimerax.core.tools import ToolInstance
-from Qt.QtCore import Qt, QTimer
-from Qt.QtGui import QGuiApplication
+from Qt.QtCore import QRect, Qt, QTimer
+from Qt.QtGui import QGuiApplication, QIcon
 from Qt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -29,6 +29,9 @@ from Qt.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QProgressBar,
+    QProxyStyle,
+    QStyle,
+    QStyleOptionDockWidget,
     QPushButton,
     QSlider,
     QToolButton,
@@ -47,7 +50,30 @@ from .manager import (
 )
 
 OK, WARN, ERR, MUTED = "#2e8b57", "#b8860b", "#d03030", "#808080"
+SETUP_BLUE = "#2474c4"
 MRC_FILTER = "MRC files (*.mrc *.rec *.map *.mrcs *.st *.ali)"
+
+
+class _TitleIconStyle(QProxyStyle):
+    """Add an icon to the native dock title while retaining its buttons and dragging."""
+
+    def __init__(self, icon, dock):
+        super().__init__()
+        self.setParent(dock)
+        self.icon = icon
+
+    def drawControl(self, element, option, painter, widget=None):
+        if element == QStyle.ControlElement.CE_DockWidgetTitle and not option.verticalTitleBar:
+            background = QStyleOptionDockWidget(option)
+            background.title = ""
+            super().drawControl(element, background, painter, widget)
+            title = QStyleOptionDockWidget(option)
+            title.rect = option.rect.adjusted(24, 0, 0, 0)
+            super().drawControl(element, title, painter, widget)
+            self.icon.paint(painter, QRect(option.rect.left() + 3,
+                                          option.rect.center().y() - 8, 18, 18))
+        else:
+            super().drawControl(element, option, painter, widget)
 
 
 class ETSAMTool(ToolInstance):
@@ -83,9 +109,10 @@ class ETSAMTool(ToolInstance):
         self._bold_title()
         self._refresh_volumes()
         self._show_setup(self.manager.setup_state, self.manager.setup_message)
-        self.manager.ensure_etsam()  # installs ETSAM silently on first start if needed
+        self.manager.ensure_etsam()  # check only; installation needs a button click
 
     def delete(self):
+        self.setup_timer.stop()
         for handler in self._handlers:
             self.session.triggers.remove_handler(handler)
         self.manager.remove_listener(self._on_manager_event)
@@ -99,6 +126,9 @@ class ETSAMTool(ToolInstance):
             dock = self.tool_window._dock_widget  # no public API for the title's font
         except Exception:
             return
+        dock.setWindowIcon(self.window_icon)
+        if not isinstance(dock.style(), _TitleIconStyle):
+            dock.setStyle(_TitleIconStyle(self.window_icon, dock))
         bold = dock.font()
         bold.setBold(True)
         dock.setFont(bold)
@@ -110,14 +140,32 @@ class ETSAMTool(ToolInstance):
         s = self.manager.settings
         root = QVBoxLayout(parent)
         root.setContentsMargins(6, 6, 6, 6)
+        self.window_icon = QIcon(os.path.join(os.path.dirname(__file__), "docs", "etsam-icon.svg"))
+        parent.setWindowIcon(self.window_icon)
 
-        # The ETSAM environment's setup: found, installed silently on first start,
-        # or missing with a link to the installation guide.
+        # Check for ETSAM and offer installation before downloading anything.
+        self.setup_row = QWidget()
+        setup_layout = QHBoxLayout(self.setup_row)
+        setup_layout.setContentsMargins(0, 0, 0, 0)
+        setup_layout.setSpacing(6)
+        self.setup_spinner = QLabel()
+        self.setup_spinner.setFixedWidth(20)
+        self.setup_spinner.setStyleSheet(f"color: {SETUP_BLUE}; font-size: 18px;")
+        self.setup_spinner.hide()
+        self.setup_frame = 0
+        self.setup_timer = QTimer(self.setup_row, interval=90)
+        self.setup_timer.timeout.connect(self._advance_setup_spinner)
+        setup_layout.addWidget(self.setup_spinner, 0, Qt.AlignmentFlag.AlignTop)
         self.setup_label = QLabel()
         self.setup_label.setWordWrap(True)
         self.setup_label.setStyleSheet(f"color: {MUTED};")
         self.setup_label.setOpenExternalLinks(True)
-        root.addWidget(self.setup_label)
+        setup_layout.addWidget(self.setup_label, 1)
+        root.addWidget(self.setup_row)
+        self.install_btn = QPushButton("Install ETSAM")
+        self.install_btn.clicked.connect(lambda: self.manager.ensure_etsam(install=True))
+        self.install_btn.hide()
+        root.addWidget(self.install_btn)
 
         form = QFormLayout()
         row = QHBoxLayout()
@@ -284,9 +332,23 @@ class ETSAMTool(ToolInstance):
         root.addWidget(self.error_panel)
         root.addStretch()
 
-    def _set_setup(self, text):
+    def _advance_setup_spinner(self):
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        self.setup_spinner.setText(frames[self.setup_frame % len(frames)])
+        self.setup_frame += 1
+
+    def _set_setup(self, text, busy=False):
         self.setup_label.setText(text)
-        self.setup_label.setVisible(bool(text))  # takes no space once ETSAM is ready
+        self.setup_label.setStyleSheet(f"color: {SETUP_BLUE if busy else MUTED};")
+        self.setup_row.setVisible(bool(text))
+        self.setup_spinner.setVisible(busy and bool(text))
+        if busy and text:
+            if not self.setup_timer.isActive():
+                self.setup_frame = 0
+                self._advance_setup_spinner()
+                self.setup_timer.start()
+        else:
+            self.setup_timer.stop()
 
     def _set_status(self, text, color=""):
         self.status_label.setStyleSheet(f"color: {color};" if color else "")
@@ -374,8 +436,12 @@ class ETSAMTool(ToolInstance):
     # --------------------------------------------------------------- setup --
 
     def _show_setup(self, state, message):
+        self.install_btn.setVisible(state in ("missing", "failed") and etsam_env.can_install())
+        self.install_btn.setEnabled(not self.manager.busy)
         first = html.escape(message.splitlines()[0]) if message else ""
-        if state in ("missing", "failed"):
+        if state == "missing":
+            self._set_setup(f"<span style='color:{WARN}'>{first}</span>")
+        elif state == "failed":
             self._set_setup(
                 f"<span style='color:{ERR}'>{first}</span> "
                 f"<a href='{etsam_env.INSTALL_DOCS}'>Installation guide</a>"
@@ -383,9 +449,11 @@ class ETSAMTool(ToolInstance):
             if state == "failed":
                 self._show_error("Installing ETSAM failed", message)
         elif state == "checking":
-            self._set_setup("Looking for ETSAM…")
-        else:  # installing, ready
-            self._set_setup(first)
+            self._set_setup("Looking for ETSAM…", busy=True)
+        elif state == "installing":
+            self._set_setup(first, busy=True)
+        else:  # ready: blue confirmation without an active spinner
+            self._set_setup(f"<span style='color:{SETUP_BLUE}'>{first}</span>" if first else "")
         self.setup_label.setToolTip(message)
 
     # ----------------------------------------------------------------- run --
@@ -541,7 +609,7 @@ class ETSAMTool(ToolInstance):
         busy = self.manager.busy
         has_volume = self._current_volume() is not None
         has_result = self._current_result() is not None
-        self.run_btn.setEnabled(not busy and has_volume)
+        self.run_btn.setEnabled(not busy and has_volume and self.manager.setup_state == "ready")
         self.volume_combo.setEnabled(not busy)
         self.cancel_btn.setEnabled(self.manager.running)
         self.save_mask_btn.setVisible(has_result)

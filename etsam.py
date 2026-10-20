@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import http.client
 import importlib.metadata
+import logging
 import os
 import sys
 import threading
@@ -9,10 +10,18 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+from importlib.resources import files
 
 import mrcfile
 import numpy as np
 import torch
+from PIL import Image
+from rich import box
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
 import inference
 import postprocess
@@ -369,19 +378,112 @@ def segment(
     return combine_quadrant_logits(quadrant_results, tomogram_data.shape)
 
 
-def _version():
-    """Installed version of ETSAM (the installer and pip/conda installs all record it)."""
+BLUE = "#29abe2"
+
+
+@lru_cache(maxsize=1)
+def _native_image_type():
+    """Probe lazily, only for a real interactive CLI, never on module import."""
+    if not all(stream is not None and stream.isatty()
+               for stream in (sys.stdin, sys.stdout, sys.__stdin__, sys.__stdout__)):
+        return None
+    # A terminal that ignores graphics queries is an ordinary unsupported case.
+    # Suppress the library's probe warnings while preserving its logging settings.
+    logger = logging.getLogger("textual_image._terminal")
+    was_disabled = logger.disabled
+    try:
+        logger.disabled = True
+        from textual_image.renderable import Image, SixelImage, TGPImage
+        return Image if Image in (SixelImage, TGPImage) else None
+    except Exception:
+        # Branding must not prevent segmentation when terminal probing fails.
+        return None
+    finally:
+        logger.disabled = was_disabled
+
+
+def version():
+    """Read the same package version for installer, pip, and conda installations."""
     try:
         return importlib.metadata.version("etsam")
     except importlib.metadata.PackageNotFoundError:
         return "unknown (ETSAM is not installed with pip)"
 
 
+def banner(console=None, *, show_logo=True):
+    """Show a native image only when supported; otherwise show just name and version."""
+    console = console if console is not None else Console(highlight=False)
+    text = Text("ETSAM", style=f"bold {BLUE}")
+    text.append(f"\nVersion: {version()}\n", style="default")
+    text.append("Segment membranes in cryo-electron tomograms", style="default")
+    try:
+        "▀╭╮╰╯".encode(console.encoding)
+        unicode_ok = True
+    except (UnicodeEncodeError, LookupError):
+        unicode_ok = False
+
+    content = text
+    image_type = (
+        _native_image_type()
+        if show_logo and console.is_terminal and not console.no_color and unicode_ok else None
+    )
+    if image_type is not None:
+        # Pass the original transparent PNG to the native renderer. No block,
+        # braille or Unicode-image fallback is used on unsupported terminals.
+        stacked = console.width < 64
+        logo_width = min(12, max(6, console.width - (6 if stacked else 34)))
+        try:
+            with files("etsam_assets").joinpath("etsam-logo.png").open("rb") as image_file:
+                with Image.open(image_file) as image:
+                    logo = image_type(image.copy(), width=logo_width, height="auto")
+            if stacked:
+                content = Group(logo, text)
+            else:
+                layout = Table.grid(padding=(0, 1))
+                layout.add_column(width=logo_width)
+                layout.add_column()
+                layout.add_row(logo, text)
+                content = layout
+        except (OSError, ValueError):
+            content = text
+
+    return Panel(
+        content, box=box.ROUNDED if unicode_ok else box.ASCII,
+        border_style=BLUE, padding=(0, 1), expand=False,
+    )
+
+
+def _print_banner():
+    console = Console(file=sys.stdout, highlight=False)
+    try:
+        console.print(banner(console))
+    except Exception:
+        # A failed graphics operation must never stop an ETSAM command.
+        console.print(banner(console, show_logo=False))
+
+
+def print_banner():
+    """Print once at command startup; argparse handles the version-only case."""
+    if not any(arg in ("-V", "--version") for arg in sys.argv[1:]):
+        _print_banner()
+
+
+class VersionAction(argparse.Action):
+    """Render directly so argparse does not reflow the banner's whitespace."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, default=argparse.SUPPRESS, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        _print_banner()
+        parser.exit()
+
+
 def main():
+    print_banner()
     parser = argparse.ArgumentParser(
         prog="etsam",
         usage="etsam [options] TOMOGRAM",
-        description="Segment cell membranes in a cryo-ET tomogram (.mrc) with ETSAM.",
         epilog="Documentation: https://jianlin-cheng.github.io/ETSAM/",
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=24),
     )
@@ -389,7 +491,7 @@ def main():
         "input_tomogram_file_path", metavar="TOMOGRAM", help="input tomogram (.mrc)"
     )
     parser.add_argument(
-        "-V", "--version", action="version", version=f"etsam {_version()}", help="show the version and exit"
+        "-V", "--version", action=VersionAction, help="show the version and exit"
     )
     output = parser.add_argument_group("output")
     output.add_argument(
@@ -425,6 +527,10 @@ def main():
         help="zero (default), grid, grid_zero, etsam_stage1_partial",
     )  # fmt: skip
     postprocess.add_postprocess_arguments(parser.add_argument_group("post-processing"))
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
 
     args = parser.parse_args()
     stage1_prompt = args.stage1_prompt

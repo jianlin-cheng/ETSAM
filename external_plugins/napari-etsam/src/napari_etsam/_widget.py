@@ -1,5 +1,6 @@
 """The ETSAM membrane segmentation dock widget."""
 
+import html
 import platform
 import sys
 import time
@@ -11,7 +12,7 @@ from napari.layers import Image
 from napari.utils.colormaps import DirectLabelColormap
 from napari.utils.notifications import show_info
 from qtpy.QtCore import QObject, Qt, QTimer, QUrl, Signal
-from qtpy.QtGui import QDesktopServices, QGuiApplication
+from qtpy.QtGui import QDesktopServices, QGuiApplication, QIcon
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,6 +39,7 @@ from napari_etsam._writer import save_mrc
 DOCS_URL = "https://jianlin-cheng.github.io/ETSAM/napari/"
 DEFAULT_THRESHOLD = -0.25
 OK, WARN, ERR, MUTED = "#3fb950", "#d29922", "#f85149", "#8b949e"
+SETUP_BLUE = "#58a6ff"
 
 
 Cancelled = etsam_run.Cancelled
@@ -62,6 +64,7 @@ class ETSAMWidget(QWidget):
         self.signals = _Signals()
         self.signals.progress.connect(self._on_progress)
         self.worker = None
+        self.etsam_ready = False
         self.run_process = None  # etsam_run.WorkerRun in progress
         # id(image layer) -> dict(image, labels, logits, cleanup, split, threshold), where
         # labels shows the logits thresholded at "threshold" (and cleaned up, if enabled)
@@ -76,7 +79,7 @@ class ETSAMWidget(QWidget):
         self.viewer.layers.events.inserted.connect(self._on_layer_inserted)
         self.viewer.layers.events.removed.connect(self._on_layer_removed)
         self._refresh_layers()
-        self.signals.setup.connect(self._set_setup)
+        self.signals.setup.connect(self._on_setup_progress)
         self._ensure_etsam()
 
     def showEvent(self, event):
@@ -88,7 +91,28 @@ class ETSAMWidget(QWidget):
         parent = self.parentWidget()
         while parent is not None and not isinstance(parent, QDockWidget):
             parent = parent.parentWidget()
-        title = getattr(parent.titleBarWidget(), "title", None) if parent else None
+        if parent is None:
+            return
+        parent.setWindowIcon(self.window_icon)
+        # napari replaces the title bar when the dock is floated or moved.
+        if not parent.property("etsamTitleIconConnected"):
+            parent.setProperty("etsamTitleIconConnected", True)
+            refresh = lambda *_: QTimer.singleShot(0, self._bold_title)
+            parent.topLevelChanged.connect(refresh)
+            parent.dockLocationChanged.connect(refresh)
+        bar = parent.titleBarWidget()
+        title = getattr(bar, "title", None)
+        if isinstance(title, QLabel):
+            layout = bar.layout()
+            if layout is not None and bar.findChild(QLabel, "etsamTitleIcon") is None:
+                icon_label = QLabel(bar)
+                icon_label.setObjectName("etsamTitleIcon")
+                icon_label.setPixmap(self.window_icon.pixmap(18, 18))
+                icon_label.setFixedSize(18, 18)
+                icon_label.setAccessibleName("ETSAM membrane icon")
+                icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                index = layout.indexOf(title)
+                layout.insertWidget(index if index >= 0 else layout.count(), icon_label)
         if isinstance(title, QLabel):
             font = title.font()
             font.setBold(True)
@@ -97,14 +121,32 @@ class ETSAMWidget(QWidget):
     # ------------------------------------------------------------------ UI --
     def _build_ui(self):
         root = QVBoxLayout(self)
+        self.window_icon = QIcon(str(Path(__file__).with_name("etsam-icon.svg")))
+        self.setWindowIcon(self.window_icon)
 
-        # The ETSAM environment's setup: found, installed silently on first start,
-        # or missing with a link to the installation guide.
+        # Check for ETSAM and offer installation before downloading anything.
+        self.setup_row = QWidget()
+        setup_layout = QHBoxLayout(self.setup_row)
+        setup_layout.setContentsMargins(0, 0, 0, 0)
+        setup_layout.setSpacing(6)
+        self.setup_spinner = QLabel()
+        self.setup_spinner.setFixedWidth(20)
+        self.setup_spinner.setStyleSheet(f"color: {SETUP_BLUE}; font-size: 18px;")
+        self.setup_spinner.hide()
+        self.setup_frame = 0
+        self.setup_timer = QTimer(self.setup_row, interval=90)
+        self.setup_timer.timeout.connect(self._advance_setup_spinner)
+        setup_layout.addWidget(self.setup_spinner, 0, Qt.AlignmentFlag.AlignTop)
         self.setup_label = QLabel()
         self.setup_label.setWordWrap(True)
         self.setup_label.setStyleSheet(f"color: {MUTED};")
         self.setup_label.setOpenExternalLinks(True)
-        root.addWidget(self.setup_label)
+        setup_layout.addWidget(self.setup_label, 1)
+        root.addWidget(self.setup_row)
+        self.install_btn = QPushButton("Install ETSAM")
+        self.install_btn.clicked.connect(lambda: self._ensure_etsam(install=True))
+        self.install_btn.hide()
+        root.addWidget(self.install_btn)
 
         form = QFormLayout()
         row = QHBoxLayout()
@@ -246,9 +288,23 @@ class ETSAMWidget(QWidget):
         root.addStretch()
         self._update_result_buttons()
 
-    def _set_setup(self, text):
+    def _advance_setup_spinner(self):
+        frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        self.setup_spinner.setText(frames[self.setup_frame % len(frames)])
+        self.setup_frame += 1
+
+    def _set_setup(self, text, busy=False):
         self.setup_label.setText(text)
-        self.setup_label.setVisible(bool(text))  # takes no space once ETSAM is ready
+        self.setup_label.setStyleSheet(f"color: {SETUP_BLUE if busy else MUTED};")
+        self.setup_row.setVisible(bool(text))
+        self.setup_spinner.setVisible(busy and bool(text))
+        if busy and text:
+            if not self.setup_timer.isActive():
+                self.setup_frame = 0
+                self._advance_setup_spinner()
+                self.setup_timer.start()
+        else:
+            self.setup_timer.stop()
 
     def _set_status(self, text, color=""):
         self.status_label.setStyleSheet(f"color: {color};" if color else "")
@@ -339,28 +395,45 @@ class ETSAMWidget(QWidget):
             self.viewer.open(path, plugin="napari-etsam")
 
     # --------------------------------------------------------------- setup --
-    def _ensure_etsam(self):
-        """Find ETSAM's environment; install it silently on first start if there is none."""
+    def _ensure_etsam(self, install=False):
+        """Find ETSAM; install only after the user clicks Install ETSAM."""
+        if self.worker is not None:
+            return
+        self.install_btn.hide()
         signals = self.signals
 
         def job():
             if etsam_env.find_python():
-                return ""
-            if not etsam_env.can_install():
-                raise etsam_run.ETSAMError(etsam_env.NOT_FOUND, "NotFound")
+                return True
+            if not install or not etsam_env.can_install():
+                return False
             signals.setup.emit("Installing ETSAM (first start)…")
             etsam_env.install(log=signals.setup.emit)
-            return "✓ ETSAM is installed."
+            return True
 
-        self._set_setup("Looking for ETSAM…")
+        self._set_setup("Looking for ETSAM…", busy=True)
         self.run_btn.setEnabled(False)
         self.worker = create_worker(job, _ignore_errors=True)
-        self.worker.returned.connect(self._set_setup)
+        self.worker.returned.connect(self._on_setup_result)
         self.worker.errored.connect(self._on_setup_error)
         self.worker.finished.connect(self._on_finished)
         self.worker.start()
 
+    def _on_setup_progress(self, text):
+        self._set_setup(html.escape(text), busy=True)
+
+    def _on_setup_result(self, ready):
+        self.etsam_ready = ready
+        self.install_btn.setVisible(not ready and etsam_env.can_install())
+        message = etsam_env.INSTALL_MESSAGE if etsam_env.can_install() else etsam_env.NOT_FOUND
+        self._set_setup(
+            f"<span style='color:{SETUP_BLUE}'>✓ ETSAM is installed.</span>"
+            if ready else f"<span style='color:{WARN}'>{message}</span>"
+        )
+
     def _on_setup_error(self, exc):
+        self.etsam_ready = False
+        self.install_btn.setVisible(etsam_env.can_install())
         first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
         self._set_setup(
             f"<span style='color:{ERR}'>{first}</span> "
@@ -491,7 +564,7 @@ class ETSAMWidget(QWidget):
     def _on_finished(self):
         self.worker = None
         self.run_process = None
-        self.run_btn.setEnabled(True)
+        self.run_btn.setEnabled(self.etsam_ready)
         self.cancel_btn.setEnabled(False)
         self._update_result_buttons()
 

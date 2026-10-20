@@ -9,6 +9,7 @@ import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 
 <section class="landing-hero hero not-content" aria-label="ETSAM overview and quick start">
   <div class="landing-hero-copy">
+    <img class="etsam-hero-icon" src={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/etsam-icon.svg`} alt="ETSAM membrane icon" width="200" height="160" />
     <h1>ETSAM</h1>
     <p class="tagline">Effectively segmenting cell membranes in cryo-electron tomograms with a two-stage SAM2-based deep learning model.</p>
     <div class="hero-actions">

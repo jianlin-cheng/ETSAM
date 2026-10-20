@@ -1,9 +1,11 @@
+<img src="https://raw.githubusercontent.com/jianlin-cheng/ETSAM/main/ETSAM_icon.svg" alt="ETSAM membrane icon" width="200" height="160" />
+
 # ETSAM Plugin for ChimeraX
 
 The **ETSAM ChimeraX plugin** runs ETSAM from [UCSF ChimeraX](https://www.cgl.ucsf.edu/chimerax/). You open a tomogram, choose it in the ETSAM panel, click **Segment membranes**, and the membranes appear as a new surface/volume in ChimeraX. You can then adjust the confidence threshold if needed and save the segmentation volume.
 
 > **Note**
-> On first start, the plugin installs ETSAM in its own environment (if not already installed using the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation)).
+> On first start, if ETSAM is missing, click **Install ETSAM** to set it up in its own environment (or install it beforehand using the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation)).
 
 ![ETSAM membrane segmentation shown as a gold surface over a tomogram slice in ChimeraX](https://raw.githubusercontent.com/jianlin-cheng/ETSAM/main/docs/public/chimerax/chimerax-result.png)
 
@@ -32,9 +34,13 @@ toolshed install ETSAM
 
 Restart ChimeraX after installing or updating the plugin.
 
-### 2. First start: ETSAM is installed for you
+### 2. First start: click Install ETSAM
 
-ETSAM itself runs in its own environment, separate from ChimeraX. When you first open the ETSAM panel, the plugin looks for it and, if it is not installed yet, runs the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended) in the background. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`) and sets up the conda environment and the model weights (about 5 GB in total), so this takes a few minutes; the panel shows its progress. Subsequent use starts are immediate.
+ETSAM itself runs in its own environment, separate from ChimeraX. When you open the ETSAM panel, the plugin checks whether ETSAM is installed. If it is missing on a supported computer, the panel shows an **Install ETSAM** button. Click it to start the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended). Opening the panel does not start an installation.
+
+Installation downloads about **5 GB** and may take **10–15 minutes**. Keep ChimeraX open until it finishes; the panel shows progress. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`). Subsequent use starts immediately.
+
+ETSAM requires **Linux or Windows and an NVIDIA GPU**. macOS is not supported. Contributions are welcome to extend hardware/software support.
 
 ## Segmenting a Tomogram
 

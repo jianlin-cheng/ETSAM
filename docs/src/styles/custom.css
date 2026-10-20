@@ -424,3 +424,11 @@ main:has(.landing-hero) > .content-panel:first-child {
     min-height: auto;
   }
 }
+
+/* Preserve the membrane icon proportions at every viewport size. */
+.etsam-hero-icon {
+  display: block;
+  width: min(12.5rem, 100%);
+  height: auto;
+  margin-bottom: 0.75rem;
+}

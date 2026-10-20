@@ -12,6 +12,7 @@
 </style>
 </head>
 <body>
+<img src="etsam-icon.svg" alt="ETSAM membrane icon" width="200" height="160">
 <h1>ETSAM Membrane Segmentation</h1>
 <p>
 ETSAM segments cell membranes in cryo-electron tomograms (<code>.mrc</code>, <code>.rec</code>,
@@ -20,17 +21,16 @@ ETSAM segments cell membranes in cryo-electron tomograms (<code>.mrc</code>, <co
 <a href="https://jianlin-cheng.github.io/ETSAM/chimerax/">jianlin-cheng.github.io/ETSAM/chimerax</a>.
 </p>
 
-<h2>First start: ETSAM is installed for you</h2>
+<h2>First start: click Install ETSAM</h2>
 <p>
-ETSAM runs in its own environment, separate from ChimeraX. When you first open the tool, it looks for ETSAM and,
-if it is not installed, runs the
-<a href="https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended">ETSAM
-installer</a> in the background: ETSAM goes into <code>~/etsam_env</code> (on Windows,
-<code>%USERPROFILE%\etsam_env</code>), and PyTorch with CUDA support and the model weights are downloaded (about 5 GB). This takes a few
-minutes, once; the tool shows the progress. The installer supports NVIDIA GPUs on Linux and Windows. On other
-computers, install ETSAM yourself as described in
-<a href="https://jianlin-cheng.github.io/ETSAM/installation/#method-2-conda-environment-from-source">Installation ▸
-Conda Environment from Source</a>; the tool links to it.
+ETSAM runs in its own environment, separate from ChimeraX. Opening the tool checks for ETSAM.
+If it is missing on a supported computer, click <b>Install ETSAM</b> to start installation.
+This downloads about <b>5 GB</b> and may take <b>10–15 minutes</b>.
+Keep ChimeraX open until installation finishes; the tool shows progress.
+ETSAM goes into <code>~/etsam_env</code> (on Windows, <code>%USERPROFILE%\etsam_env</code>).
+</p>
+<p>
+ETSAM requires <b>Linux or Windows and an NVIDIA GPU</b>. macOS is not supported yet. Contributions are welcome to extend hardware/software support.
 </p>
 <p>
 An existing installation is used as it is: an installer folder, or a conda environment named <code>etsam</code>.

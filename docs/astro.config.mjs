@@ -8,6 +8,11 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'ETSAM',
+      logo: {
+        light: './src/assets/logo-light.svg',
+        dark: './src/assets/logo-dark.svg',
+        alt: 'ETSAM membrane icon',
+      },
       description:
         'Documentation for ETSAM, a two-stage SAM2-based model for membrane segmentation in cryo-electron tomograms.',
       customCss: ['./src/styles/custom.css'],

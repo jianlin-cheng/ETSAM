@@ -155,11 +155,8 @@ class ETSAMManager:
 
     # -- ETSAM environment ----------------------------------------------------
 
-    def ensure_etsam(self):
-        """
-        Find the ETSAM environment, installing it silently (in the background) if
-        there is none and the ETSAM installer supports this computer.
-        """
+    def ensure_etsam(self, install=False):
+        """Find ETSAM; install only after the user clicks Install ETSAM."""
         if self.busy or self.setup_state == "ready":
             return
         self._set_setup("checking", "")
@@ -171,6 +168,9 @@ class ETSAMManager:
                     return
                 if not etsam_env.can_install():
                     self._on_main(self._set_setup, "missing", etsam_env.NOT_FOUND)
+                    return
+                if not install:
+                    self._on_main(self._set_setup, "missing", etsam_env.INSTALL_MESSAGE)
                     return
                 report = lambda message: self._on_main(self._set_setup, "installing", message)
                 report("Installing ETSAM (first start)…")

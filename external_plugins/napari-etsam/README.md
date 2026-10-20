@@ -1,9 +1,11 @@
+<img src="https://raw.githubusercontent.com/jianlin-cheng/ETSAM/main/ETSAM_icon.svg" alt="ETSAM membrane icon" width="200" height="160" />
+
 # ETSAM Plugin for napari
 
 The **napari-etsam** plugin runs ETSAM inside [napari](https://napari.org), a free image viewer for multi-dimensional data. You open a tomogram, install and activate plugin, click **Segment membranes**. The membrane mask appears as an new label layer that you can refine, inspect and save.
 
 > **Note**
-> On first start, the plugin installs ETSAM in its own environment (if not already installed using the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation)).
+> On first start, if ETSAM is missing, click **Install ETSAM** to set it up in its own environment (or install it beforehand using the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation)).
 
 ![ETSAM membrane segmentation overlaid on a tomogram in napari](https://raw.githubusercontent.com/jianlin-cheng/ETSAM/main/docs/public/napari/napari-result.png)
 
@@ -40,9 +42,13 @@ pip install napari-etsam
 > /path/to/napari/python -m pip install ./ETSAM/external_plugins/napari-etsam
 > ```
 
-### 2. First start: ETSAM is installed for you
+### 2. First start: click Install ETSAM
 
-ETSAM itself runs in its own environment, separate from napari. When you first open the ETSAM panel, the plugin looks for it and, if it is not installed yet, runs the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended) in the background. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`) and sets up the conda environment and the model weights (about 5 GB in total), so this takes a few minutes; the panel shows its progress. Subsequent use starts are immediate.
+ETSAM itself runs in its own environment, separate from napari. When you open the ETSAM panel, the plugin checks whether ETSAM is installed. If it is missing on a supported computer, the panel shows an **Install ETSAM** button. Click it to start the [ETSAM installer](https://jianlin-cheng.github.io/ETSAM/installation/#method-1-etsam-installer-recommended). Opening the panel does not start an installation.
+
+Installation downloads about **5 GB** and may take **10–15 minutes**. Keep napari open until it finishes; the panel shows progress. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`). Subsequent use starts immediately.
+
+ETSAM requires **Linux or Windows and an NVIDIA GPU**. macOS is not supported. Contributions are welcome to extend hardware/software support.
 
 ## Segmenting a Tomogram
 

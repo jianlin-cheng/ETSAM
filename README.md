@@ -1,3 +1,5 @@
+<img src="ETSAM_icon.svg" alt="ETSAM membrane icon" width="200" height="160" />
+
 # ETSAM: Effectively Segmenting Membranes in cryo-Electron Tomograms
 
 [![DOI:10.1101/2025.11.23.689996](http://img.shields.io/badge/DOI-10.1101/2025.11.23.689996-B31B1B.svg)](https://doi.org/10.1101/2025.11.23.689996)

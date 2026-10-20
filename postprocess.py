@@ -356,12 +356,22 @@ def save_mask(mask: np.ndarray, voxel_size, output_map_file_path: str) -> None:
 
 
 def _run_cli() -> None:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        installed_version = version("etsam")
+    except PackageNotFoundError:
+        installed_version = "unknown"
     parser = argparse.ArgumentParser(
         prog="etsam-postprocess",
         usage="etsam-postprocess [options] INPUT_MASK OUTPUT_MASK",
         description="Post-process a binary membrane mask (.mrc) from ETSAM.",
         epilog="Documentation: https://jianlin-cheng.github.io/ETSAM/advanced/",
         formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=24),
+    )
+    parser.add_argument(
+        "-V", "--version", action="version", version=f"etsam-postprocess {installed_version}",
+        help="show the version and exit",
     )
     parser.add_argument("input_mask_file_path", metavar="INPUT_MASK", help="input mask (.mrc)")
     parser.add_argument("output_mask_file_path", metavar="OUTPUT_MASK", help="output mask (.mrc)")
