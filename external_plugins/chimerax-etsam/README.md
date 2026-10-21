@@ -45,7 +45,7 @@ ETSAM requires **Linux or Windows and an NVIDIA GPU**. macOS is not supported. C
 ## Segmenting a Tomogram
 
 1. **Open the panel**: **Tools ▸ Volume Data ▸ ETSAM Membrane Segmentation**.
-2. **Open a tomogram**: click **Open…** in the panel, or use **File ▸ Open…** (`.mrc`, `.rec`, `.map`, `.mrcs`, `.st` or `.ali`). It is selected as the *Tomogram* automatically. If several volumes are open, choose the one to segment.
+2. **Open a tomogram**: click **Open…** in the panel, or use **File ▸ Open…**. It is selected as the *Tomogram* automatically. If several volumes are open, choose the one to segment.
 3. Optionally, tick **Clean up mask** or **Closely spaced membranes** (see [Options](#options)).
 4. Click **Segment membranes**. The progress bar follows ETSAM through Stage 1 and Stage 2 slice by slice, then through clean-up (for example *Stage 2 · slice 83/360 · about 25 s left*). Click **Cancel** to stop at any time.
 
@@ -126,3 +126,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 ## Uninstalling
 
 Run `toolshed uninstall ETSAM` to remove the plugin integration. To remove ETSAM completely, refer uninstall section in [Installation](https://jianlin-cheng.github.io/ETSAM/installation/#3-uninstall-etsam) guide.
+
+# Cite:
+
+Selvaraj, J., Cheng, J. ETSAM: effectively segmenting cell membranes in cryo-electron tomograms. *Nat Commun* (2026). [https://doi.org/10.1038/s41467-026-77962-7](https://doi.org/10.1038/s41467-026-77962-7)

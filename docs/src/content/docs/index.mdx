@@ -15,7 +15,7 @@ import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
     <div class="hero-actions">
       <LinkButton href="/ETSAM/installation/" variant="primary" icon="download" iconPlacement="start">Installation</LinkButton>
       <LinkButton href="/ETSAM/tutorial/" variant="primary" icon="open-book" iconPlacement="start">Tutorial</LinkButton>
-      <LinkButton href="https://doi.org/10.1101/2025.11.23.689996" variant="minimal" icon="external" target="_blank" rel="noreferrer">Read Preprint</LinkButton>
+      <LinkButton href="https://doi.org/10.1038/s41467-026-77962-7" variant="minimal" icon="external" target="_blank" rel="noreferrer">Read Paper</LinkButton>
       <LinkButton href="https://github.com/jianlin-cheng/ETSAM" variant="minimal" icon="github" target="_blank" rel="noreferrer">View on GitHub</LinkButton>
     </div>
   </div>
@@ -71,21 +71,20 @@ Cryogenic Electron Tomography (cryo-ET) visualizes cell structures and macromole
 
 ETSAM addresses these challenges by fine-tuning SAM2's video-prediction architecture and using a cascaded two-stage design where each stage's output informs the next. The model was developed and tested by Joel Selvaraj and Jianlin Cheng at the University of Missouri.
 
-:::note[Preprint]
-Selvaraj & Cheng (2025). *ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms.* bioRxiv. [doi:10.1101/2025.11.23.689996](https://doi.org/10.1101/2025.11.23.689996)
+:::note[Published paper]
+Selvaraj & Cheng (2026). *ETSAM: effectively segmenting cell membranes in cryo-electron tomograms.* Nature Communications. [doi:10.1038/s41467-026-77962-7](https://doi.org/10.1038/s41467-026-77962-7)
 :::
 
 ### Cite
 
 ```bibtex
-@article {Selvaraj2025.11.23.689996,
-    author    = {Selvaraj, Joel and Cheng, Jianlin},
-    title     = {ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms},
-    elocation-id = {2025.11.23.689996},
-    year      = {2025},
-    doi       = {10.1101/2025.11.23.689996},
-    publisher = {Cold Spring Harbor Laboratory},
-    eprint    = {https://www.biorxiv.org/content/early/2025/11/26/2025.11.23.689996.full.pdf},
-    journal   = {bioRxiv}
+@article{Selvaraj2026,
+    author  = {Selvaraj, Joel and Cheng, Jianlin},
+    title   = "{ETSAM}: effectively segmenting cell membranes in cryo-electron tomograms",
+    journal = {Nature Communications},
+    year    = {2026},
+    doi     = {10.1038/s41467-026-77962-7},
+    url     = {https://doi.org/10.1038/s41467-026-77962-7},
+    issn    = {2041-1723}
 }
 ```

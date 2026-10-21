@@ -85,8 +85,8 @@ export default defineConfig({
           label: 'External',
           items: [
             {
-              label: 'bioRxiv Preprint',
-              link: 'https://doi.org/10.1101/2025.11.23.689996',
+              label: 'Nature Communications Paper',
+              link: 'https://doi.org/10.1038/s41467-026-77962-7',
               attrs: { target: '_blank', rel: 'noreferrer' },
             },
           ],

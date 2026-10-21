@@ -93,5 +93,5 @@ ETSAM was compared against two leading cryo-ET membrane segmentation methods TAR
 ETSAM achieves a more favorable precision-recall trade-off than both baselines on the independent test set, demonstrating robust membrane detection across simulated and experimental tomograms.
 
 :::tip
-For full quantitative results, precision-recall curves, and statistical significance tests, see the [ETSAM preprint on bioRxiv](https://doi.org/10.1101/2025.11.23.689996).
+For full quantitative results, precision-recall curves, and statistical significance tests, see the [ETSAM paper in Nature Communications](https://doi.org/10.1038/s41467-026-77962-7).
 :::

@@ -9,20 +9,19 @@ next:
   link: /ETSAM/troubleshooting/
 ---
 
-If ETSAM contributed to your research, please cite the preprint below.
+If ETSAM contributed to your research, please cite the published paper below.
 
 ## BibTeX
 
 ```bibtex
-@article {Selvaraj2025.11.23.689996,
-    author    = {Selvaraj, Joel and Cheng, Jianlin},
-    title     = {ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms},
-    elocation-id = {2025.11.23.689996},
-    year      = {2025},
-    doi       = {10.1101/2025.11.23.689996},
-    publisher = {Cold Spring Harbor Laboratory},
-    eprint    = {https://www.biorxiv.org/content/early/2025/11/26/2025.11.23.689996.full.pdf},
-    journal   = {bioRxiv}
+@article{Selvaraj2026,
+    author  = {Selvaraj, Joel and Cheng, Jianlin},
+    title   = "{ETSAM}: effectively segmenting cell membranes in cryo-electron tomograms",
+    journal = {Nature Communications},
+    year    = {2026},
+    doi     = {10.1038/s41467-026-77962-7},
+    url     = {https://doi.org/10.1038/s41467-026-77962-7},
+    issn    = {2041-1723}
 }
 ```
 
@@ -30,14 +29,14 @@ If ETSAM contributed to your research, please cite the preprint below.
 
 | Field | Value |
 | --- | --- |
-| Title | ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms |
+| Title | ETSAM: effectively segmenting cell membranes in cryo-electron tomograms |
 | Authors | Joel Selvaraj and Jianlin Cheng |
 | Affiliation | University of Missouri, Department of Electrical Engineering and Computer Science |
-| Publisher | Cold Spring Harbor Laboratory |
-| Venue | bioRxiv |
-| DOI | `10.1101/2025.11.23.689996` |
+| Venue | Nature Communications |
+| Publication date | 11 October 2026 |
+| DOI | `10.1038/s41467-026-77962-7` |
 
 ## Links
 
-- [View the preprint on bioRxiv](https://doi.org/10.1101/2025.11.23.689996)
+- [Read the published paper in Nature Communications](https://doi.org/10.1038/s41467-026-77962-7)
 - [Open the GitHub repository](https://github.com/jianlin-cheng/ETSAM)

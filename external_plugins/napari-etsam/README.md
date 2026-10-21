@@ -105,3 +105,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 ## Uninstalling
 
 Remove the plugin with **Plugins ▸ Install/Uninstall Plugins ▸ napari-etsam ▸ Uninstall**, or `pip uninstall napari-etsam`. To remove ETSAM completely, refer uninstall section in [Installation](https://jianlin-cheng.github.io/ETSAM/installation/#3-uninstall-etsam) guide.
+
+# Cite:
+
+Selvaraj, J., Cheng, J. ETSAM: effectively segmenting cell membranes in cryo-electron tomograms. *Nat Commun* (2026). [https://doi.org/10.1038/s41467-026-77962-7](https://doi.org/10.1038/s41467-026-77962-7)

@@ -2,7 +2,7 @@
 
 # ETSAM: Effectively Segmenting Membranes in cryo-Electron Tomograms
 
-[![DOI:10.1101/2025.11.23.689996](http://img.shields.io/badge/DOI-10.1101/2025.11.23.689996-B31B1B.svg)](https://doi.org/10.1101/2025.11.23.689996)
+[![DOI:10.1038/s41467-026-77962-7](https://img.shields.io/badge/DOI-10.1038%2Fs41467--026--77962--7-B31B1B.svg)](https://doi.org/10.1038/s41467-026-77962-7)
 [![Documentation](https://img.shields.io/badge/Documentation-jianlin--cheng.github.io%2FETSAM-0891B2.svg)](https://jianlin-cheng.github.io/ETSAM/)
 [![Harvard Dataverse](https://img.shields.io/badge/Harvard%20Dataverse-10.7910%2FDVN%2FK4JKCW-A51C30.svg)](https://doi.org/10.7910/DVN/K4JKCW)
 [![Zenodo](https://img.shields.io/badge/Zenodo-10.5281%2Fzenodo.17571925-1682D4.svg)](https://doi.org/10.5281/zenodo.17571925)
@@ -70,14 +70,13 @@ Refer [Training](https://jianlin-cheng.github.io/ETSAM/training) and [Evaluation
 
 # Cite
 ```
-@article {Selvaraj2025.11.23.689996,
-	author = {Selvaraj, Joel and Cheng, Jianlin},
-	title = {ETSAM: Effectively Segmenting Cell Membranes in cryo-Electron Tomograms},
-	elocation-id = {2025.11.23.689996},
-	year = {2025},
-	doi = {10.1101/2025.11.23.689996},
-	publisher = {Cold Spring Harbor Laboratory},
-	eprint = {https://www.biorxiv.org/content/early/2025/11/26/2025.11.23.689996.full.pdf},
-	journal = {bioRxiv}
+@article{Selvaraj2026,
+    author  = {Selvaraj, Joel and Cheng, Jianlin},
+    title   = "{ETSAM}: effectively segmenting cell membranes in cryo-electron tomograms",
+    journal = {Nature Communications},
+    year    = {2026},
+    doi     = {10.1038/s41467-026-77962-7},
+    url     = {https://doi.org/10.1038/s41467-026-77962-7},
+    issn    = {2041-1723}
 }
 ```
