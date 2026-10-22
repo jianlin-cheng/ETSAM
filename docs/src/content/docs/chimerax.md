@@ -25,7 +25,7 @@ On first start, if ETSAM is missing, click **Install ETSAM** to set it up in its
 | | Minimum | Recommended |
 | --- | --- | --- |
 | GPU | NVIDIA GPU with 2 GB VRAM | NVIDIA GPU with 4 GB+ VRAM |
-| RAM | 16 GB | 32 GB |
+| RAM | 4 GB | 8 GB |
 | Operating system | **Linux or Windows, with an NVIDIA GPU** | |
 
 
@@ -128,7 +128,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 | --- | --- |
 | *No tomogram selected* | Open a tomogram first (**Open…** or *File ▸ Open*). |
 | *This volume cannot be segmented* | ETSAM needs a single 3D volume (Z, Y, X), not a 2D image. |
-| *stopped by the operating system* / *ran out of memory* | ETSAM needs about 15–25 GB of RAM for a 1000 × 1000 × 500 tomogram. Close other programs, or bin the tomogram. |
+| *stopped by the operating system* / *ran out of memory* | Close other programs, or bin the tomogram. |
 | *Could not save …* | The folder is read-only, or the disk is full. Choose another folder. |
 | *The GPU is busy* | Another program keeps ETSAM from using the GPU. Restart ChimeraX; if the message persists, close other programs that use the GPU (see the note below). |
 | *Installing ETSAM failed: … requires an NVIDIA GPU* | The installer supports NVIDIA GPUs only. Install ETSAM yourself as described in [Installation](/ETSAM/installation/#method-2-conda-environment-from-source). |

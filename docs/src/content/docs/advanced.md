@@ -217,7 +217,6 @@ Loading video frames from numpy array as Floating point array
 using zero initialized empty mask as prompt
 ==> Running ETSAM inference on preprocessed map
 propagate in video: 100%|██████████| 500/500 [00:29<00:00, 17.23it/s]
-==> Combining quadrant logits into full volume
 ==> Saving predicted mask
 -------------------------------------------------------------------------------------------------
 ```

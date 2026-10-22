@@ -9,6 +9,12 @@
 
 Cryogenic Electron Tomography (cryo-ET) is an emerging experimental technique to visualize cell structures and macromolecules in their native cellular environment. Accurate segmentation of cell structures in cryo-ET tomograms, such as cell membranes, is crucial to advance our understanding of cellular organization and function. However, several inherent limitations in cryo-ET tomograms, including the very low signal-to-noise ratio, missing wedge artifacts from limited tilt angles, and other noise artifacts, collectively hinder the reliable identification and delineation of these structures. In this study, we introduce ETSAM - a two-stage SAM2-based fine-tuned AI model that effectively segments cell membranes in cryo-ET tomograms. It is trained on a diverse dataset comprising 83 experimental tomograms from the CryoET Data Portal (CDP) database and 28 simulated tomograms generated using PolNet. ETSAM achieves state-of-the-art performance on an independent test set comprising 10 simulated tomograms and 10 experimental tomograms for which ground-truth annotations are available. It robustly segments cell membranes with high sensitivity and precision, achieving a more favorable precision–recall trade-off than other deep learning methods.
 
+# Changelog
+## v2.0.0
+Faster segmentation with much less CPU memory, and <ins>byte-identical results</ins>. On the 17 experimental test-set tomograms (NVIDIA RTX 4070), compared with the benchmark in Supplementary Data 2 of the paper:
+- CPU time: 80.0 s to 64.5 s on average (**19% faster**)
+- CPU memory: 17,423 MB to 1,872 MB on average (**89% less**)
+
 # ETSAM Pipeline 
 ![ETSAM Pipeline](<assets/etsam-framework.png>)
 
@@ -18,7 +24,7 @@ Cryogenic Electron Tomography (cryo-ET) is an emerging experimental technique to
 ## Hardware Requirements
 <ins>ETSAM requires:</ins>
 - a NVIDIA GPU with atleast 2GB VRAM, 4GB VRAM recommended. 
-- atleast 16GB CPU RAM, recommended 32GB.
+- atleast 4GB CPU RAM, recommended 8GB.
 
 <ins>Tested on</ins>
 - Intel® Core™ i7-14700K

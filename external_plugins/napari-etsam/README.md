@@ -16,7 +16,7 @@ The **napari-etsam** plugin runs ETSAM inside [napari](https://napari.org), a fr
 | | Minimum | Recommended |
 | --- | --- | --- |
 | GPU | NVIDIA GPU with 2 GB VRAM | NVIDIA GPU with 4 GB+ VRAM |
-| RAM | 16 GB | 32 GB |
+| RAM | 4 GB | 8 GB |
 | Operating system | **Linux or Windows, with an NVIDIA GPU** | |
 
 ## Installation

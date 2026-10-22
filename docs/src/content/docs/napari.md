@@ -25,7 +25,7 @@ On first start, if ETSAM is missing, click **Install ETSAM** to set it up in its
 | | Minimum | Recommended |
 | --- | --- | --- |
 | GPU | NVIDIA GPU with 2 GB VRAM | NVIDIA GPU with 4 GB+ VRAM |
-| RAM | 16 GB | 32 GB |
+| RAM | 4 GB | 8 GB |
 | Operating system | **Linux or Windows, with an NVIDIA GPU** | |
 
 ## Installation

@@ -22,7 +22,7 @@ Installation typically takes 5–15 minutes, mostly spent downloading conda envi
 ### Hardware
 
 - NVIDIA GPU with at least 2 GB VRAM; 4 GB VRAM is recommended.
-- At least 16 GB CPU RAM; 32 GB is recommended. Peak memory grows with tomogram size: a 360 × 928 × 960 tomogram needs about 9 GB.
+- At least 4 GB CPU RAM; 8 GB is recommended.
 - About 6 GB of disk space for PyTorch and the 1.9 GB of model weights.
 
 ### Supported Platforms
