@@ -25,7 +25,7 @@ from rich.text import Text
 
 import inference
 import postprocess
-from sam2.utils.disk_volume import read_by_slice
+from sam2.utils.disk_volume import read_by_slice, scratch_volume, writable_array
 from sam2.utils.volume import FusedTomogram, NormalizedTomogram, StageOneLogits
 
 CONFIG = "configs/sam2.1/sam2.1_hiera_b+.yaml"
@@ -59,6 +59,16 @@ def softplus_minmax_normalize(array):
     array -= minimum
     array /= maximum - minimum
     return array
+
+
+def softplus_minmax_volume(tomogram):
+    """softplus_minmax_normalize a whole tomogram into a scratch volume."""
+    normalized = scratch_volume(tomogram.shape)
+    with writable_array(normalized) as array:
+        for index in range(len(tomogram)):
+            array[index] = tomogram[index]
+        softplus_minmax_normalize(array)
+    return normalized
 
 
 def save_mask(mask, voxel_size, output_map_file_path):
@@ -338,7 +348,7 @@ def segment(
         # Normalized slice by slice, when the predictor reads them.
         normalized_tomogram_data = NormalizedTomogram(tomogram_data)
     elif normalize_method == "softplus_minmax":
-        normalized_tomogram_data = softplus_minmax_normalize(np.array(tomogram_data, dtype=np.float32))
+        normalized_tomogram_data = softplus_minmax_volume(tomogram_data)
 
     if split_processing:
         quadrants = split_into_quadrants(normalized_tomogram_data)

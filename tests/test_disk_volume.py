@@ -1,13 +1,16 @@
 """File-backed volumes must read and write exactly what an array would."""
 
+import os
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import mrcfile
 import numpy as np
 
-from sam2.utils.disk_volume import DiskVolume, read_by_slice
+from sam2.utils.disk_volume import DiskVolume, read_by_slice, scratch_volume, writable_array
 
 
 def stack(volume):
@@ -61,6 +64,40 @@ class DiskVolumeTests(unittest.TestCase):
             np.zeros((4, 5, 6)),
         ):
             self.assertIs(read_by_slice(array), array)
+
+    def test_writes_slices_and_crops(self):
+        expected = self.rng.standard_normal((6, 10, 12)).astype(np.float32)
+        with patch.dict(os.environ, {"ETSAM_SCRATCH": "disk"}):
+            volume = scratch_volume(expected.shape)
+        self.assertIsInstance(volume, DiskVolume)
+        crops = [volume[:, :5, :7], volume[:, :5, 7:], volume[:, 5:, :]]
+        for index in range(6):
+            crops[0][index] = expected[index, :5, :7]
+            crops[1][index] = expected[index, :5, 7:]
+            crops[2][index] = expected[index, 5:]
+        self.assertBytesEqual(stack(volume), expected)
+        with writable_array(volume) as array:
+            self.assertBytesEqual(np.asarray(array), expected)
+            array += 1
+        self.assertBytesEqual(stack(volume), expected + 1)
+        volume.close()
+
+    def test_scratch_storage_settings(self):
+        for setting, shape, on_disk in (
+            ("memory", (300, 512, 512), False),
+            ("auto", (300, 512, 512), True),
+            ("auto", (3, 8, 8), False),
+            ("disk", (3, 8, 8), True),
+        ):
+            with patch.dict(os.environ, {"ETSAM_SCRATCH": setting}):
+                volume = scratch_volume(shape)
+            self.assertEqual((volume.shape, isinstance(volume, DiskVolume)), (shape, on_disk))
+            if on_disk:
+                volume.close()
+        # Without enough free disk space, scratch volumes stay in RAM.
+        full_disk = SimpleNamespace(free=0)
+        with patch.dict(os.environ, {"ETSAM_SCRATCH": "disk"}), patch("shutil.disk_usage", return_value=full_disk):
+            self.assertIsInstance(scratch_volume((3, 8, 8)), np.ndarray)
 
 
 if __name__ == "__main__":
