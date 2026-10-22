@@ -269,15 +269,12 @@ def sever_mask_connections(
     """
     Sever small 2D interconnections in each slice along ``axis`` (default Z).
     """
-    foreground = mask > 0 if mask.dtype != np.bool_ else mask
-    cleaned = _apply_per_slice(
-        foreground,
+    # Threshold each slice when it is processed, rather than copying the whole mask.
+    return _apply_per_slice(
+        mask,
         axis,
-        lambda s: sever_connections_bridge(s, max_bridge_len, max_spur_len),
+        lambda s: sever_connections_bridge(s > 0, max_bridge_len, max_spur_len),
     )
-    if mask.dtype == np.bool_:
-        return cleaned
-    return cleaned.astype(mask.dtype)
 
 
 def identify_3d_blobs_and_remove_thin_blobs(
@@ -300,6 +297,7 @@ def identify_3d_blobs_and_remove_thin_blobs(
 
     structure = _full_structure_3d()
     labels, num = cc_label(mask, structure=structure)
+    del mask
     if num == 0:
         return np.zeros_like(ip_mrc_data)
 
@@ -313,11 +311,8 @@ def identify_3d_blobs_and_remove_thin_blobs(
         z_span = (z_slice.stop - z_slice.start) if z_slice is not None else 0
         keep[idx] = z_span >= min_z_span
 
-    filtered_mask = keep[labels]
-
-    if ip_mrc_data.dtype == np.bool_:
-        return filtered_mask
-    return filtered_mask.astype(ip_mrc_data.dtype)
+    # Look the labels up in the input's dtype, without a bool volume in between.
+    return keep.astype(ip_mrc_data.dtype)[labels]
 
 
 def postprocess(
@@ -351,7 +346,7 @@ def postprocess(
 
 def save_mask(mask: np.ndarray, voxel_size, output_map_file_path: str) -> None:
     with mrcfile.new(output_map_file_path, overwrite=True) as mrc:
-        mrc.set_data(mask.astype(np.uint8))
+        mrc.set_data(mask.astype(np.uint8, copy=False))
         mrc.voxel_size = voxel_size
 
 

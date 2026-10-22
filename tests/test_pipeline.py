@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 import etsam
+import postprocess
 from sam2.utils.volume import NormalizedTomogram
 
 
@@ -94,6 +95,18 @@ class PipelineTests(unittest.TestCase):
         ):
             result = etsam.segment(tomogram, split_processing=True)
         self.assertBytesEqual(result, original_min_max_positive_values(tomogram))
+
+    def test_postprocessing_keeps_the_mask_dtype(self):
+        mask = np.zeros((12, 20, 20), dtype=np.uint8)
+        mask[1:11, 5:15, 5:15] = 1  # spans 10 slices: kept
+        mask[2:4, 0:2, 0:2] = 1  # spans 2 slices: removed
+        expected = mask.copy()
+        expected[2:4, 0:2, 0:2] = 0
+        for dtype in (np.uint8, bool):
+            result = postprocess.postprocess(mask.astype(dtype), remove_parallel_membrane_misconnections=False)
+            self.assertBytesEqual(result, expected.astype(dtype))
+            severed = postprocess.sever_mask_connections(mask.astype(dtype))
+            self.assertEqual(severed.dtype, np.dtype(dtype))
 
 
 if __name__ == "__main__":
