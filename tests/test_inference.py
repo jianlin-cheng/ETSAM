@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 import inference
+from sam2.utils.misc import load_video_frames_from_numpy_array_as_float_numpy
 
 
 class FakePredictor:
@@ -57,6 +58,23 @@ class InferenceTests(unittest.TestCase):
         predictor = FakePredictor()
         inference.vos_inference(predictor, self.volume, prompt_method="zero")
         self.assertEqual(predictor.most_frames_kept, 17)
+
+
+class FrameLoaderTests(unittest.TestCase):
+    def test_frames_prepared_on_demand_match_the_whole_video(self):
+        rng = np.random.default_rng(3)
+        for shape, repeat_channels in (((6, 17, 21), True), ((6, 17, 21, 3), False)):
+            volume = rng.standard_normal(shape).astype(np.float32)
+            for size in (16, 32):
+                load = lambda offload: load_video_frames_from_numpy_array_as_float_numpy(
+                    volume, size, offload, compute_device=torch.device("cpu"),
+                    repeat_channels=repeat_channels,
+                )
+                video, _, _ = load(offload=False)
+                frames, height, width = load(offload=True)
+                self.assertEqual((len(frames), height, width), (6, 17, 21))
+                for index in (5, 0, 3, 0):
+                    self.assertTrue(torch.equal(frames[index], video[index]))
 
 
 if __name__ == "__main__":

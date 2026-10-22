@@ -400,6 +400,43 @@ def load_video_frames_from_numpy_array_as_image(
     return images, video_height, video_width
 
 
+class TomogramFrameLoader:
+    """Frames of a (N, H, W) or (N, H, W, 3) volume, prepared when they are read.
+
+    Each frame is resized and normalized exactly as in
+    load_video_frames_from_numpy_array_as_float_numpy, which holds them all.
+    """
+
+    def __init__(self, volume, image_size, img_mean, img_std, repeat_channels):
+        self.volume = volume
+        self.image_size = image_size
+        self.img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
+        self.img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
+        self.repeat_channels = repeat_channels
+
+    def __len__(self):
+        return len(self.volume)
+
+    def __getitem__(self, index):
+        image = self.volume[index]
+        size = (self.image_size, self.image_size)
+        if image.shape[-1] == 3:
+            image = np.stack(
+                [np.array(Image.fromarray(image[:, :, c]).resize(size)) for c in range(3)],
+                axis=-1,
+            )
+        else:
+            image = np.array(Image.fromarray(image).resize(size))
+        image = torch.from_numpy(image).float()
+        if self.repeat_channels:
+            image = image.unsqueeze(0).repeat(3, 1, 1)
+        else:
+            image = image.permute(2, 1, 0)  # (H, W, C) to (C, W, H), as for the whole video
+        image -= self.img_mean
+        image /= self.img_std
+        return image
+
+
 def load_video_frames_from_numpy_array_as_float_numpy(
     video_path,
     image_size,
@@ -410,6 +447,12 @@ def load_video_frames_from_numpy_array_as_float_numpy(
     repeat_channels=True,
 ):
     """Load the video frames from a numpy array."""
+    if offload_video_to_cpu:
+        # The predictor reads one frame at a time, so prepare each frame when it
+        # is read instead of keeping the whole resized and normalized video.
+        frames = TomogramFrameLoader(video_path, image_size, img_mean, img_std, repeat_channels)
+        return frames, video_path.shape[1], video_path.shape[2]
+
     img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
     img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
 
