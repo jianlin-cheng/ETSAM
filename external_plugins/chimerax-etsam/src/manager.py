@@ -116,6 +116,8 @@ class ETSAMManager:
     def __init__(self, session):
         self.session = session
         self.settings = ETSAMSettings(session, "ETSAM")
+        # Every session starts at the default threshold; only the other options are remembered.
+        self.settings.threshold = DEFAULT_THRESHOLD
         self.running = False  # segmenting
         self.run_process = None  # etsam_run.WorkerRun in progress
         self.setup_state = "unknown"  # see the "setup" event above

@@ -90,6 +90,8 @@ class ETSAMTool(ToolInstance):
         self.eta_anchor = None
         self.threshold_timer = QTimer(singleShot=True, interval=200)
         self.threshold_timer.timeout.connect(self._apply_threshold)
+        # id(tomogram) -> threshold the user chose for it; others use DEFAULT_THRESHOLD.
+        self.thresholds = {}
 
         from chimerax.ui import MainToolWindow
 
@@ -108,6 +110,7 @@ class ETSAMTool(ToolInstance):
         self.tool_window.manage(placement="side")
         self._bold_title()
         self._refresh_volumes()
+        self._volume_selected()
         self._show_setup(self.manager.setup_state, self.manager.setup_message)
         self.manager.ensure_etsam()  # check only; installation needs a button click
 
@@ -248,8 +251,7 @@ class ETSAMTool(ToolInstance):
 
         self.advanced_toggle.toggled.connect(toggle)
 
-        # Options are remembered between sessions.
-        self.th_spin.setValue(s.threshold)
+        # Options other than the threshold are remembered between sessions.
         for checkbox, key in (
             (self.split_cb, "split_processing"),
             (self.cleanup_cb, "cleanup"),
@@ -400,9 +402,13 @@ class ETSAMTool(ToolInstance):
         return self.manager.result_for(self._current_volume())
 
     def _volume_selected(self):
+        # A tomogram shows the default threshold unless the user chose another for it
+        # (with the slider or the result's surface level).
         result = self._current_result()
         if result is not None:
             self._show_threshold(result.threshold)
+        else:
+            self._show_threshold(self.thresholds.get(id(self._current_volume()), DEFAULT_THRESHOLD))
         self._update_buttons()
 
     def _models_added(self, trigger_name, models):
@@ -411,7 +417,10 @@ class ETSAMTool(ToolInstance):
 
     def _refresh_volumes(self, select=None):
         volumes = self._volumes()
-        select = select or self._current_volume()
+        previous = self._current_volume()
+        select = select or previous
+        self.thresholds = {key: value for key, value in self.thresholds.items()
+                           if key in {id(v) for v in volumes}}
         self.volume_combo.blockSignals(True)
         self.volume_combo.clear()
         for v in volumes:
@@ -421,6 +430,8 @@ class ETSAMTool(ToolInstance):
         self.volume_combo.blockSignals(False)
         self.volume_combo.setVisible(bool(volumes))
         self.no_volume_label.setVisible(not volumes)
+        if self._current_volume() is not previous:
+            self._volume_selected()
         self._update_buttons()
 
     def _open_file(self):
@@ -535,6 +546,9 @@ class ETSAMTool(ToolInstance):
 
     def _threshold_changed(self, value):
         self.manager.settings.threshold = float(value)
+        volume = self._current_volume()
+        if volume is not None:
+            self.thresholds[id(volume)] = float(value)
         self.th_slider.blockSignals(True)
         self.th_slider.setValue(int(round(max(-3, min(3, value)) * 100)))
         self.th_slider.blockSignals(False)
@@ -547,7 +561,9 @@ class ETSAMTool(ToolInstance):
             self.manager.set_threshold(result, self.th_spin.value())
 
     def _show_threshold(self, value):
-        """Show a threshold set elsewhere (the volume's level), without applying it again."""
+        """Show a threshold set elsewhere (the volume's level), without applying it again.
+        The next run uses it."""
+        self.manager.settings.threshold = float(value)
         self.th_spin.blockSignals(True)
         self.th_spin.setValue(value)
         self.th_spin.blockSignals(False)
@@ -591,8 +607,10 @@ class ETSAMTool(ToolInstance):
         if event == "setup":
             self._show_setup(*args)
         elif event == "level":
-            if args[0] is self._current_result():
-                self._show_threshold(args[0].threshold)
+            result = args[0]
+            self.thresholds[id(result.source)] = result.threshold  # chosen by the user
+            if result is self._current_result():
+                self._show_threshold(result.threshold)
         elif event == "progress":
             self._on_progress(*args)
         elif event == "done":

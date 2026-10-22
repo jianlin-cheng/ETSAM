@@ -69,6 +69,8 @@ class ETSAMWidget(QWidget):
         # id(image layer) -> dict(image, labels, logits, cleanup, split, threshold), where
         # labels shows the logits thresholded at "threshold" (and cleaned up, if enabled)
         self.results = {}
+        # id(image layer) -> threshold the user chose for it; others use DEFAULT_THRESHOLD.
+        self.thresholds = {}
         self.started = 0.0
         self.eta_anchor = None
         self.threshold_timer = QTimer(self, singleShot=True, interval=200)
@@ -151,7 +153,7 @@ class ETSAMWidget(QWidget):
         form = QFormLayout()
         row = QHBoxLayout()
         self.layer_combo = QComboBox()
-        self.layer_combo.currentIndexChanged.connect(self._update_result_buttons)
+        self.layer_combo.currentIndexChanged.connect(self._layer_selected)
         open_btn = QPushButton("Open…")
         open_btn.clicked.connect(self._open_file)
         row.addWidget(self.layer_combo, 1)
@@ -169,7 +171,7 @@ class ETSAMWidget(QWidget):
         reset.clicked.connect(lambda: self.th_spin.setValue(DEFAULT_THRESHOLD))
         self.th_slider.valueChanged.connect(lambda v: self.th_spin.setValue(v / 100))
         self.th_spin.valueChanged.connect(self._threshold_changed)
-        self.th_spin.setValue(DEFAULT_THRESHOLD)
+        self._show_threshold(DEFAULT_THRESHOLD)
         th_row.addWidget(self.th_slider)
         th_row.addWidget(self.th_spin)
         th_row.addWidget(reset)
@@ -352,8 +354,11 @@ class ETSAMWidget(QWidget):
         return None
 
     def _refresh_layers(self, select=None):
-        select = select or self._current_image()
+        previous = self._current_image()
+        select = select or previous
         images = self._images()
+        self.thresholds = {key: value for key, value in self.thresholds.items()
+                           if key in {id(layer) for layer in images}}
         self.layer_combo.blockSignals(True)
         self.layer_combo.clear()
         for layer in images:
@@ -363,6 +368,13 @@ class ETSAMWidget(QWidget):
         elif select in images:
             self.layer_combo.setCurrentIndex(images.index(select))
         self.layer_combo.blockSignals(False)
+        if self._current_image() is not previous:
+            self._layer_selected()
+        self._update_result_buttons()
+
+    def _layer_selected(self):
+        # A tomogram shows the default threshold unless the user chose another for it.
+        self._show_threshold(self.thresholds.get(id(self._current_image()), DEFAULT_THRESHOLD))
         self._update_result_buttons()
 
     def _on_layer_inserted(self, event):
@@ -570,11 +582,23 @@ class ETSAMWidget(QWidget):
 
     # ----------------------------------------------------------- threshold --
     def _threshold_changed(self, value):
+        image = self._current_image()
+        if image is not None:
+            self.thresholds[id(image)] = value
         self.th_slider.blockSignals(True)
         self.th_slider.setValue(int(round(max(-3, min(3, value)) * 100)))
         self.th_slider.blockSignals(False)
         if self._current_result() is not None and self.worker is None:
             self.threshold_timer.start()
+
+    def _show_threshold(self, value):
+        """Show the threshold of the selected tomogram, without applying it to its result."""
+        self.th_spin.blockSignals(True)
+        self.th_spin.setValue(value)
+        self.th_spin.blockSignals(False)
+        self.th_slider.blockSignals(True)
+        self.th_slider.setValue(int(round(max(-3, min(3, value)) * 100)))
+        self.th_slider.blockSignals(False)
 
     def _apply_threshold(self):
         """Re-binarize the stored logits (and re-run clean-up) without re-running ETSAM."""
