@@ -54,6 +54,26 @@ def load_video_frames_from_tomogram_data(
     return tomogram_data, video_height, video_width
 
 
+def _write_slice(result, index, logits):
+    # Copy straight from the model into the result, without a CPU array in between.
+    torch.from_numpy(result[index]).copy_(logits)
+
+
+def _forget_expired_frames(predictor, inference_state, frame_idx):
+    """Drop tracking outputs that forward propagation will not read again.
+
+    Each frame attends to the memories of the previous num_maskmem frames (times
+    the temporal stride) and to the object pointers of the previous
+    max_obj_ptrs_in_encoder frames. Prompted (conditioning) frames are kept.
+    """
+    history = max(
+        predictor.num_maskmem * predictor.memory_temporal_stride_for_eval,
+        predictor.max_obj_ptrs_in_encoder,
+    )
+    for outputs in inference_state["output_dict_per_obj"].values():
+        outputs["non_cond_frame_outputs"].pop(frame_idx - history, None)
+
+
 @torch.inference_mode()
 @torch.autocast(device_type="cuda", dtype=torch.bfloat16)
 def vos_inference(
@@ -254,28 +274,19 @@ def vos_inference(
         print("Error: Invalid prompt method")
         exit()
 
-    # run propagation throughout the video and collect the results in a dict
+    # run propagation throughout the video and write each slice into the result
     print("==> Running ETSAM inference on preprocessed map")
-    video_segments = {}
+    per_obj_output_mask_full = {}
     for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
         inference_state
     ):
-        per_obj_output_mask = {
-            out_obj_id: out_mask_logits[i].cpu().numpy()
-            for i, out_obj_id in enumerate(out_obj_ids)
-        }
-        video_segments[out_frame_idx] = per_obj_output_mask
+        for i, out_obj_id in enumerate(out_obj_ids):
+            if out_obj_id not in per_obj_output_mask_full:
+                per_obj_output_mask_full[out_obj_id] = np.empty((num_frames, height, width), dtype=np.float32)
+            _write_slice(per_obj_output_mask_full[out_obj_id], out_frame_idx, out_mask_logits[i, 0])
+        _forget_expired_frames(predictor, inference_state, out_frame_idx)
         if progress is not None:
-            progress(len(video_segments), num_frames)
-
-    per_obj_output_mask_full = {}
-    for object_id in object_ids_set:
-        per_obj_output_mask_full[object_id] = []
-        for frame_idx in video_segments.keys():
-            per_obj_output_mask_full[object_id].append(video_segments[frame_idx][object_id])
-    
-    for object_id in object_ids_set:
-            per_obj_output_mask_full[object_id] = np.array(per_obj_output_mask_full[object_id]).squeeze(1)
+            progress(out_frame_idx + 1, num_frames)
 
     # free up memory
     del predictor

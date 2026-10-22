@@ -1,0 +1,63 @@
+"""Propagation loop of inference.vos_inference, run with a stand-in predictor."""
+
+import unittest
+
+import numpy as np
+import torch
+
+import inference
+
+
+class FakePredictor:
+    """Returns each frame times two as its logits, like SAM2's predictor API."""
+
+    num_maskmem = 7
+    memory_temporal_stride_for_eval = 1
+    max_obj_ptrs_in_encoder = 16
+
+    def init_state(self, video_path, **kwargs):
+        self.volume = video_path
+        self.most_frames_kept = 0
+        num_frames, height, width = video_path.shape
+        return {
+            "images": video_path,
+            "num_frames": num_frames,
+            "video_height": height,
+            "video_width": width,
+            "device": torch.device("cpu"),
+            "output_dict_per_obj": {0: {"cond_frame_outputs": {}, "non_cond_frame_outputs": {}}},
+        }
+
+    def add_new_mask(self, inference_state, frame_idx, obj_id, mask):
+        inference_state["output_dict_per_obj"][0]["cond_frame_outputs"][frame_idx] = mask
+
+    def propagate_in_video(self, inference_state):
+        kept = inference_state["output_dict_per_obj"][0]["non_cond_frame_outputs"]
+        for index in range(inference_state["num_frames"]):
+            kept[index] = index
+            self.most_frames_kept = max(self.most_frames_kept, len(kept))
+            frame = np.asarray(self.volume[index], dtype=np.float32)
+            yield index, [1], torch.from_numpy(frame * 2)[None, None]
+
+
+class InferenceTests(unittest.TestCase):
+    def setUp(self):
+        self.volume = np.random.default_rng(5).standard_normal((40, 9, 11)).astype(np.float32)
+
+    def test_slices_are_written_in_order(self):
+        progress = []
+        result = inference.vos_inference(
+            FakePredictor(), self.volume, prompt_method="zero",
+            progress=lambda done, total: progress.append((done, total)),
+        )
+        np.testing.assert_array_equal(result[1], self.volume * 2)
+        self.assertEqual(progress, [(i + 1, 40) for i in range(40)])
+
+    def test_tracking_history_is_bounded(self):
+        predictor = FakePredictor()
+        inference.vos_inference(predictor, self.volume, prompt_method="zero")
+        self.assertEqual(predictor.most_frames_kept, 17)
+
+
+if __name__ == "__main__":
+    unittest.main()
