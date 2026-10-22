@@ -25,6 +25,7 @@ from rich.text import Text
 
 import inference
 import postprocess
+from sam2.utils.disk_volume import read_by_slice
 from sam2.utils.volume import FusedTomogram, NormalizedTomogram, StageOneLogits
 
 CONFIG = "configs/sam2.1/sam2.1_hiera_b+.yaml"
@@ -328,6 +329,9 @@ def segment(
     stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     grid_interval = 10 if split_processing else 50
+    # A memory-mapped tomogram (from the CLI or a plugin) is read with file
+    # reads, so that it does not accumulate in RAM as its slices are used.
+    tomogram_data = read_by_slice(tomogram_data)
 
     print(f"==> Normalizing tomogram data with {normalize_method} method")
     if normalize_method == "min_max_positive_values":
