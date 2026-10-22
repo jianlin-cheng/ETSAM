@@ -73,7 +73,7 @@ def softplus_minmax_volume(tomogram):
 
 def save_mask(mask, voxel_size, output_map_file_path):
     with mrcfile.new(output_map_file_path, overwrite=True) as mrc:
-        mrc.set_data(mask.astype(np.uint8))
+        mrc.set_data(mask.astype(np.uint8, copy=False))
         mrc.voxel_size = voxel_size
 
 
@@ -116,6 +116,7 @@ def run_two_stage_inference_on_tomogram(
     device="cuda",
     progress=None,
     output=None,
+    mask_threshold=None,
 ):
     """
     Run the two-stage ETSAM pipeline on a (Z, Y, X) volume (full tomogram or a sub-region).
@@ -123,14 +124,17 @@ def run_two_stage_inference_on_tomogram(
     Runs stage 1 on the normalized volume, fuses its logits with the volume, then runs stage 2.
 
     Writes the stage-2 logits into output, a float32 array matching the input
-    spatial shape (allocated if None), and returns it. Stage 1 stores its
-    logits in output too: stage 2 overwrites each slice after reading it.
+    spatial shape (allocated if None), and returns it. With mask_threshold, it
+    writes the uint8 mask (logits > mask_threshold) instead.
     progress(stage, slices_done, total_slices) is called after each slice.
     """
     if output is None:
-        output = np.empty(tomogram_data.shape, dtype=np.float32)
+        output = np.empty(tomogram_data.shape, dtype=np.float32 if mask_threshold is None else np.uint8)
+    # Stage 1 keeps its logits in the output if it can hold them: stage 2
+    # overwrites each slice after reading it.
+    stage1_storage = output if output.dtype == np.float32 else scratch_volume(output.shape)
     stage1_logits = StageOneLogits(
-        output,
+        stage1_storage,
         prompt_interval=grid_interval if stage2_prompt == "etsam_stage1_partial" else None,
         prompt_threshold=stage1_logit_threshold,
     )
@@ -161,6 +165,7 @@ def run_two_stage_inference_on_tomogram(
         device=device,
         progress=None if progress is None else lambda done, total: progress(2, done, total),
         output=output,
+        mask_threshold=mask_threshold,
     )
 
     return output
@@ -330,12 +335,19 @@ def segment(
     stage1_prompt="grid_zero",
     stage2_prompt="zero",
     progress=None,
+    *,
+    output_type="logits",
+    logit_threshold=-0.25,
 ):
     """
     Run ETSAM on a (Z, Y, X) tomogram array and return the stage-2 logits.
 
+    output_type="mask" returns the uint8 mask (logits > logit_threshold) instead,
+    which takes a quarter of the memory.
     progress(fraction, message) is called after each slice; raise from it to cancel.
     """
+    if output_type not in ("logits", "mask"):
+        raise ValueError(f"Unknown output type: {output_type}")
     stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     grid_interval = 10 if split_processing else 50
@@ -362,7 +374,7 @@ def segment(
         quadrants = [(normalized_tomogram_data, None)]
         quadrant_labels = [""]
 
-    logits = np.empty(tomogram_data.shape, dtype=np.float32)
+    result = np.empty(tomogram_data.shape, dtype=np.uint8 if output_type == "mask" else np.float32)
     for i, (label, (sub_tomogram, coords)) in enumerate(zip(quadrant_labels, quadrants)):
         if split_processing:
             print(f"\n==> Processing quadrant: {label}")
@@ -374,10 +386,10 @@ def segment(
                 progress(fraction, f"{prefix}Stage {stage} · slice {done}/{total}")
 
         if coords is None:
-            output = logits
+            output = result
         else:
             y_start, y_end, x_start, x_end = coords
-            output = logits[:, y_start:y_end, x_start:x_end]
+            output = result[:, y_start:y_end, x_start:x_end]
         run_two_stage_inference_on_tomogram(
             sub_tomogram,
             CONFIG,
@@ -390,9 +402,10 @@ def segment(
             device=device,
             progress=slice_progress,
             output=output,
+            mask_threshold=logit_threshold if output_type == "mask" else None,
         )
 
-    return logits
+    return result
 
 
 BLUE = "#29abe2"
@@ -569,12 +582,14 @@ def main():
             print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
             # The tomogram stays memory-mapped: its slices are read as needed.
-            logits = segment(
+            result = segment(
                 mrc.data,
                 normalize_method,
                 split_processing,
                 stage1_prompt,
                 stage2_prompt,
+                output_type="logits" if store_logits else "mask",
+                logit_threshold=stage2_logit_threshold,
             )
 
         if split_processing:
@@ -604,7 +619,11 @@ def main():
                 f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc",
             )
 
-        mask = (logits > stage2_logit_threshold).astype(np.uint8)
+        if store_logits:
+            logits = result
+            mask = (logits > stage2_logit_threshold).astype(np.uint8)
+        else:
+            mask = result  # thresholded during inference, without keeping the logits
 
         print("==> Saving predicted mask")
         os.makedirs(output_dir, exist_ok=True)

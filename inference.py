@@ -92,6 +92,7 @@ def vos_inference(
     grid_interval=50,
     progress=None,
     output=None,
+    mask_threshold=None,
 ):
     print("==> Preprocessing the input map")
 
@@ -109,7 +110,8 @@ def vos_inference(
         frames = inference_state["images"] = PrefetchFrameLoader(frames)
     try:
         return _prompt_and_propagate(
-            predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress, output
+            predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress,
+            output, mask_threshold,
         )
     finally:
         if isinstance(frames, PrefetchFrameLoader):
@@ -117,7 +119,8 @@ def vos_inference(
 
 
 def _prompt_and_propagate(
-    predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress, output
+    predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress,
+    output, mask_threshold,
 ):
     # print(inference_state["images"].shape)
     height = inference_state["video_height"]
@@ -298,6 +301,7 @@ def _prompt_and_propagate(
     print("==> Running ETSAM inference on preprocessed map")
     if output is not None and len(object_ids_set) != 1:
         raise ValueError("output can only hold the result of a single object")
+    dtype = np.float32 if mask_threshold is None else np.uint8
     per_obj_output_mask_full = {}
     for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
         inference_state
@@ -305,9 +309,13 @@ def _prompt_and_propagate(
         for i, out_obj_id in enumerate(out_obj_ids):
             if out_obj_id not in per_obj_output_mask_full:
                 per_obj_output_mask_full[out_obj_id] = (
-                    output if output is not None else np.empty((num_frames, height, width), dtype=np.float32)
+                    output if output is not None else np.empty((num_frames, height, width), dtype=dtype)
                 )
-            _write_slice(per_obj_output_mask_full[out_obj_id], out_frame_idx, out_mask_logits[i, 0])
+            logits = out_mask_logits[i, 0]
+            if mask_threshold is not None:
+                # Threshold on the GPU, then copy one byte per voxel instead of four.
+                logits = logits > mask_threshold
+            _write_slice(per_obj_output_mask_full[out_obj_id], out_frame_idx, logits)
         _forget_expired_frames(predictor, inference_state, out_frame_idx)
         if progress is not None:
             progress(out_frame_idx + 1, num_frames)
@@ -338,12 +346,14 @@ def etsam_inference(
     device="cuda",
     progress=None,
     output=None,
+    mask_threshold=None,
 ):
     """Run ETSAM inference on a single tomogram.
 
     progress(slices_done, total_slices) is called after each slice.
     output optionally receives the (num_frames, H, W) logits, one slice at a time:
     an array, or any object that accepts output[index] = slice.
+    With mask_threshold, the result is a uint8 mask (logits > mask_threshold).
     """
     hydra_overrides_extra = [
         "++model.non_overlap_masks=false"
@@ -372,4 +382,5 @@ def etsam_inference(
         grid_interval=grid_interval,
         progress=progress,
         output=output,
+        mask_threshold=mask_threshold,
     )

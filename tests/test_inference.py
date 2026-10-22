@@ -54,6 +54,14 @@ class InferenceTests(unittest.TestCase):
         np.testing.assert_array_equal(result[1], self.volume * 2)
         self.assertEqual(progress, [(i + 1, 40) for i in range(40)])
 
+    def test_masks_are_thresholded_like_numpy(self):
+        for threshold in (-0.25, 0.1, 1e-45, float("inf")):
+            result = inference.vos_inference(
+                FakePredictor(), self.volume, prompt_method="zero", mask_threshold=threshold
+            )
+            expected = (self.volume * 2 > threshold).astype(np.uint8)
+            self.assertEqual(result[1].tobytes(), expected.tobytes())
+
     def test_tracking_history_is_bounded(self):
         predictor = FakePredictor()
         inference.vos_inference(predictor, self.volume, prompt_method="zero")
