@@ -169,6 +169,10 @@ class ETSAMTool(ToolInstance):
         self.install_btn.clicked.connect(lambda: self.manager.ensure_etsam(install=True))
         self.install_btn.hide()
         root.addWidget(self.install_btn)
+        self.update_btn = QPushButton("Update ETSAM")
+        self.update_btn.clicked.connect(lambda: self.manager.ensure_etsam(update=True))
+        self.update_btn.hide()
+        root.addWidget(self.update_btn)
 
         form = QFormLayout()
         row = QHBoxLayout()
@@ -449,9 +453,14 @@ class ETSAMTool(ToolInstance):
     def _show_setup(self, state, message):
         self.install_btn.setVisible(state in ("missing", "failed") and etsam_env.can_install())
         self.install_btn.setEnabled(not self.manager.busy)
+        self.update_btn.setVisible(state in ("outdated", "update failed"))
+        self.update_btn.setEnabled(not self.manager.busy)
         first = html.escape(message.splitlines()[0]) if message else ""
-        if state == "missing":
+        if state in ("missing", "outdated"):
             self._set_setup(f"<span style='color:{WARN}'>{first}</span>")
+        elif state == "update failed":
+            self._set_setup(f"<span style='color:{ERR}'>{first}</span>")
+            self._show_error("Updating ETSAM failed", message)
         elif state == "failed":
             self._set_setup(
                 f"<span style='color:{ERR}'>{first}</span> "
@@ -461,7 +470,7 @@ class ETSAMTool(ToolInstance):
                 self._show_error("Installing ETSAM failed", message)
         elif state == "checking":
             self._set_setup("Looking for ETSAM…", busy=True)
-        elif state == "installing":
+        elif state in ("installing", "updating"):
             self._set_setup(first, busy=True)
         else:  # ready: blue confirmation without an active spinner
             self._set_setup(f"<span style='color:{SETUP_BLUE}'>{first}</span>" if first else "")

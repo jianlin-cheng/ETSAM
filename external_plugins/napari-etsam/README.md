@@ -95,6 +95,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 | *Installing ETSAM failed: … the folder already exists* | An earlier installation was interrupted. Delete the `etsam` folder in your home folder and reopen the panel. |
 | *ETSAM is not installed* | This computer is not supported by the installer. Install ETSAM yourself (see [Installation](#installation)), or set `ETSAM_PYTHON`. |
 | *ETSAM is not installed in the environment …* | That environment lacks ETSAM. Run step 3 of the conda installation (`pip install --no-deps -e .` in the ETSAM folder). |
+| *ETSAM … is older than this plugin* | The plugin needs an ETSAM at least as new as itself. Click **Update ETSAM**: it installs the latest ETSAM release again (about 3 GB download, 10–15 minutes). An ETSAM you installed from source must be updated the same way (`git pull`, then `pip install --no-deps -e .`). |
 | *Running on CPU (no GPU: this will be slow)* although the computer has an NVIDIA GPU | Update the NVIDIA driver, and check that PyTorch in the `etsam` environment can use the GPU (see [Verify the Installation](https://jianlin-cheng.github.io/ETSAM/installation/#4-verify-the-installation)). |
 | *The GPU is busy* | Another program keeps ETSAM from using the GPU. Close other programs that use the GPU, or restart napari. |
 | *Out of memory* | Close other programs (especially ones using the GPU) and try again, or bin the tomogram (fewer slices need less RAM). |

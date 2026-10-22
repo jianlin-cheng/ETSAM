@@ -18,6 +18,10 @@ has none, from ``conda env list --json``. Environments made by the installer
 If none is found, ``install()`` downloads the installer for this platform and
 runs it silently. The installer supports NVIDIA GPUs on Linux and Windows
 (x86-64); it stops with a clear message on other computers.
+
+A plugin release needs at least the ETSAM release of the same version
+(``needs_update``). ``update()`` reinstalls an installer-made environment with the
+latest release, as install.sh and install.ps1 do for a reinstall.
 """
 
 from __future__ import annotations
@@ -26,6 +30,7 @@ import json
 import os
 import platform
 import queue
+import re
 import threading
 import time
 from collections import deque
@@ -50,6 +55,11 @@ INSTALL_MESSAGE = (
 NOT_FOUND = (
     "ETSAM is not installed. ETSAM requires Linux or Windows and an NVIDIA GPU. "
     "macOS is not supported."
+)
+UPDATE_MESSAGE = (
+    "ETSAM {installed} is older than this plugin ({plugin}), which cannot be used "
+    "until ETSAM is updated. Click Update ETSAM to install the latest release "
+    "(about 3 GB download, 10–15 minutes)."
 )
 
 
@@ -104,6 +114,106 @@ def find_python() -> str | None:
     if override:
         return os.path.expanduser(override)
     return _pick(_registered_prefixes()) or _pick(_conda_env_list())
+
+
+# --------------------------------------------------------------------------- #
+# Versions
+# --------------------------------------------------------------------------- #
+
+
+def etsam_version(python: str) -> str | None:
+    """Version of ETSAM in the environment of ``python``, or None if it cannot be read."""
+    try:
+        out = subprocess.run(
+            [python, "-c", "import importlib.metadata as m; print(m.version('etsam'))"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            **subprocess_options(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return (out.stdout.strip() or None) if out.returncode == 0 else None
+
+
+def _release(version: str | None) -> tuple[int, ...] | None:
+    match = re.match(r"(\d+)\.(\d+)\.(\d+)", version or "")
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def needs_update(plugin_version: str, installed_version: str | None) -> bool:
+    """
+    Whether the installed ETSAM is older than this plugin release. Development builds
+    of the plugin (such as 2.0.1.dev3) are not checked: there is no release to update to.
+    """
+    if not re.fullmatch(r"\d+\.\d+\.\d+", plugin_version or ""):
+        return False
+    installed = _release(installed_version)
+    return installed is None or installed < _release(plugin_version)
+
+
+def update(python: str, log=None) -> None:
+    """
+    Reinstall the installer-made ETSAM environment of ``python`` with the latest release
+    (as install.sh and install.ps1 do for a reinstall).
+    """
+    prefix = os.path.dirname(python) if sys.platform == "win32" else os.path.dirname(os.path.dirname(python))
+    if not os.path.isfile(os.path.join(prefix, MARKER)):
+        raise RuntimeError(
+            f"ETSAM in {prefix} was not set up by the ETSAM installer, so it cannot be "
+            f"updated from here. Update it the way it was installed (see {INSTALL_DOCS})."
+        )
+    workdir = _workdir()
+    try:
+        installer = _installer(workdir, log)
+        _reinstall(installer, prefix, python, log)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _reinstall(installer: str, prefix: str, python: str, log) -> None:
+    """Remove the installation in ``prefix`` and install it again, with the model weights
+    moved aside meanwhile (a rename next to the folder: no copy, no extra disk space)."""
+    checkpoints = os.path.join(prefix, "checkpoints")
+    keep = prefix + ".checkpoints-keep"
+    if os.path.isdir(checkpoints):
+        shutil.rmtree(keep, ignore_errors=True)
+        os.replace(checkpoints, keep)
+    if log:
+        log("Removing the old ETSAM installation…")
+    uninstaller = os.path.join(prefix, "Uninstall-ETSAM.exe")
+    if os.path.exists(uninstaller):
+        # Windows: also removes the commands from the PATH and the list of apps.
+        # /_?= (the last argument, unquoted) makes it run in this folder and wait.
+        subprocess.run(f'"{uninstaller}" /S /_?={prefix}', **subprocess_options())
+    shutil.rmtree(prefix, ignore_errors=True)  # what is left, e.g. the uninstaller
+    if os.path.exists(prefix):
+        if os.path.isdir(keep) and not os.path.exists(checkpoints):
+            os.replace(keep, checkpoints)
+        raise RuntimeError(
+            f"Could not remove the old ETSAM installation in {prefix}. Close the "
+            "programs that use ETSAM (such as terminals running etsam) and try again."
+        )
+    if log:
+        log("Installing ETSAM (this downloads PyTorch, about 3 GB, and takes a few minutes)…")
+    _run_installer(installer, prefix, log,
+                   environment={"ETSAM_SKIP_WEIGHTS": "1"} if os.path.isdir(keep) else None)
+    if os.path.isdir(keep):
+        shutil.rmtree(checkpoints, ignore_errors=True)
+        os.replace(keep, checkpoints)
+        # The new release reuses the kept weights, and downloads the ones it needs that
+        # are not there: new files, or files from a new download URL.
+        environment = {
+            "ETSAM_CHECKPOINT_DIR": checkpoints,
+            "PATH": os.pathsep.join([
+                prefix, os.path.join(prefix, "Library", "mingw-w64", "bin"),
+                os.path.join(prefix, "Library", "usr", "bin"), os.path.join(prefix, "Library", "bin"),
+                os.environ.get("PATH", ""),
+            ]),
+        }
+        _run([python, "-I", "-c", "import etsam; etsam.ensure_checkpoints()"], log,
+             environment=environment, name="Checking the model weights",
+             message="Checking the model weights")
 
 
 # --------------------------------------------------------------------------- #
@@ -184,6 +294,25 @@ def install(log=None, prefix: str | None = None) -> str:
             f"Cannot install ETSAM into {prefix}: the folder already exists. Remove it, or "
             f"install ETSAM yourself (see {INSTALL_DOCS}), then try again."
         )
+    workdir = _workdir()
+    try:
+        installer = _installer(workdir, log)
+        if log:
+            log("Installing ETSAM (this downloads PyTorch, about 3 GB, and takes a few minutes)…")
+        _run_installer(installer, prefix, log)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+    return env_python(prefix)
+
+
+def _workdir() -> str:
+    cache = os.path.join(os.path.expanduser("~"), ".cache", "etsam-installer")
+    os.makedirs(cache, exist_ok=True)
+    return tempfile.mkdtemp(dir=cache)
+
+
+def _installer(workdir: str, log) -> str:
+    """The installer of the latest release for this computer, or ETSAM_INSTALLER."""
     source = os.environ.get("ETSAM_INSTALLER")
     if not source:
         name = installer_platform()
@@ -195,32 +324,25 @@ def install(log=None, prefix: str | None = None) -> str:
         if log:
             log("Looking up the latest ETSAM release…")
         source = latest_installer_url(name)
+    return _fetch(source, workdir, log)
 
-    cache = os.path.join(os.path.expanduser("~"), ".cache", "etsam-installer")
-    os.makedirs(cache, exist_ok=True)
-    workdir = tempfile.mkdtemp(dir=cache)
-    try:
-        installer = _fetch(source, workdir, log)
-        if log:
-            log("Installing ETSAM (this downloads PyTorch, about 3 GB, and takes a few minutes)…")
-        if installer.endswith(".exe"):
-            # NSIS: /D must come last and must not be quoted.
-            cmd = (
-                f'"{installer}" /S /Q /InstallationType=JustMe /AddToPath=0 '
-                f"/RegisterPython=0 /D={prefix}"
-            )
-        else:
-            cmd = ["bash", installer, "-b", "-p", prefix]
-        _run(cmd, log, prefix=prefix)
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
-    python = env_python(prefix)
-    if not os.path.exists(python) or not os.path.isfile(os.path.join(prefix, MARKER)):
+
+def _run_installer(installer: str, prefix: str, log, environment=None) -> None:
+    """Run the installer silently into the new folder ``prefix``."""
+    if installer.endswith(".exe"):
+        # NSIS: /D must come last and must not be quoted.
+        cmd = (
+            f'"{installer}" /S /Q /InstallationType=JustMe /AddToPath=0 '
+            f"/RegisterPython=0 /D={prefix}"
+        )
+    else:
+        cmd = ["bash", installer, "-b", "-p", prefix]
+    _run(cmd, log, prefix=prefix, environment=environment)
+    if not os.path.exists(env_python(prefix)) or not os.path.isfile(os.path.join(prefix, MARKER)):
         raise RuntimeError(
             "The ETSAM installer exited without completing setup. "
             f"See {os.path.join(prefix, '.step.log')} for details."
         )
-    return python
 
 
 def _fetch(source: str, workdir: str, log) -> str:
@@ -242,7 +364,8 @@ def _fetch(source: str, workdir: str, log) -> str:
     return path
 
 
-def _run(cmd, log, prefix=None) -> None:
+def _run(cmd, log, prefix=None, environment=None, name="The ETSAM installer",
+         message="Installing ETSAM: extracting and preparing the environment") -> None:
     # NSIS buffers script output until a step finishes. /Q prevents its own console;
     # read .step.log as well so PyTorch and weight-download progress reaches the UI live.
     proc = subprocess.Popen(
@@ -252,7 +375,7 @@ def _run(cmd, log, prefix=None) -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
-        **subprocess_options(),
+        **subprocess_options(environment),
     )
     lines = queue.Queue()
 
@@ -266,7 +389,7 @@ def _run(cmd, log, prefix=None) -> None:
     threading.Thread(target=read_output, name="ETSAM installer output", daemon=True).start()
     output = deque(maxlen=100)
     started = last_update = time.monotonic()
-    last_message = "Installing ETSAM: extracting and preparing the environment"
+    last_message = message
     step_path = os.path.join(prefix, ".step.log") if prefix and sys.platform == "win32" else None
     step_file = None
     step_pending = ""
@@ -351,13 +474,15 @@ def _run(cmd, log, prefix=None) -> None:
         ]
         summary = reasons[-1] if reasons else "see the details"
         raise RuntimeError(
-            f"The ETSAM installer failed: {summary}\n\n" + "\n".join(list(output)[-25:])
+            f"{name} failed: {summary}\n\n" + "\n".join(list(output)[-25:])
         )
 
 
-def subprocess_options() -> dict:
-    """Environment without the host application's Python settings, and no console windows."""
+def subprocess_options(environment=None) -> dict:
+    """Environment without the host application's Python settings (plus ``environment``),
+    and no console windows."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON") and k != "VIRTUAL_ENV"}
+    env.update(environment or {})
     env["PYTHONUNBUFFERED"] = "1"
     options = {"env": env}
     if sys.platform == "win32":

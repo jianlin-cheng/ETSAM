@@ -33,7 +33,7 @@ from qtpy.QtWidgets import (
 )
 from superqt.utils import create_worker
 
-from napari_etsam import etsam_env, etsam_run
+from napari_etsam import __version__, etsam_env, etsam_run
 from napari_etsam._writer import save_mrc
 
 DOCS_URL = "https://jianlin-cheng.github.io/ETSAM/napari/"
@@ -149,6 +149,10 @@ class ETSAMWidget(QWidget):
         self.install_btn.clicked.connect(lambda: self._ensure_etsam(install=True))
         self.install_btn.hide()
         root.addWidget(self.install_btn)
+        self.update_btn = QPushButton("Update ETSAM")
+        self.update_btn.clicked.connect(lambda: self._ensure_etsam(update=True))
+        self.update_btn.hide()
+        root.addWidget(self.update_btn)
 
         form = QFormLayout()
         row = QHBoxLayout()
@@ -407,52 +411,73 @@ class ETSAMWidget(QWidget):
             self.viewer.open(path, plugin="napari-etsam")
 
     # --------------------------------------------------------------- setup --
-    def _ensure_etsam(self, install=False):
-        """Find ETSAM; install only after the user clicks Install ETSAM."""
+    def _ensure_etsam(self, install=False, update=False):
+        """Find ETSAM and check its version; install or update it only after the
+        user clicks Install ETSAM or Update ETSAM."""
         if self.worker is not None:
             return
         self.install_btn.hide()
+        self.update_btn.hide()
         signals = self.signals
 
         def job():
-            if etsam_env.find_python():
-                return True
-            if not install or not etsam_env.can_install():
-                return False
-            signals.setup.emit("Installing ETSAM (first start)…")
-            etsam_env.install(log=signals.setup.emit)
-            return True
+            python = etsam_env.find_python()
+            if python is None:
+                if not install or not etsam_env.can_install():
+                    return "missing", None
+                signals.setup.emit("Installing ETSAM (first start)…")
+                python = etsam_env.install(log=signals.setup.emit)
+            installed = etsam_env.etsam_version(python)
+            if etsam_env.needs_update(__version__, installed):
+                if not update:
+                    return "outdated", installed
+                signals.setup.emit("Updating ETSAM to the latest release…")
+                etsam_env.update(python, log=signals.setup.emit)
+                installed = etsam_env.etsam_version(python)
+                if etsam_env.needs_update(__version__, installed):
+                    raise RuntimeError(f"The latest ETSAM release ({installed}) is older than this plugin.")
+            return "ready", installed
 
         self._set_setup("Looking for ETSAM…", busy=True)
         self.run_btn.setEnabled(False)
         self.worker = create_worker(job, _ignore_errors=True)
-        self.worker.returned.connect(self._on_setup_result)
-        self.worker.errored.connect(self._on_setup_error)
+        self.worker.returned.connect(lambda result: self._on_setup_result(*result))
+        self.worker.errored.connect(lambda exc: self._on_setup_error(exc, update))
         self.worker.finished.connect(self._on_finished)
         self.worker.start()
 
     def _on_setup_progress(self, text):
         self._set_setup(html.escape(text), busy=True)
 
-    def _on_setup_result(self, ready):
-        self.etsam_ready = ready
-        self.install_btn.setVisible(not ready and etsam_env.can_install())
-        message = etsam_env.INSTALL_MESSAGE if etsam_env.can_install() else etsam_env.NOT_FOUND
-        self._set_setup(
-            f"<span style='color:{SETUP_BLUE}'>✓ ETSAM is installed.</span>"
-            if ready else f"<span style='color:{WARN}'>{message}</span>"
-        )
+    def _on_setup_result(self, state, installed):
+        # The plugin can only be used with an ETSAM at least as new as itself.
+        self.etsam_ready = state == "ready"
+        self.install_btn.setVisible(state == "missing" and etsam_env.can_install())
+        self.update_btn.setVisible(state == "outdated")
+        if state == "ready":
+            self._set_setup(f"<span style='color:{SETUP_BLUE}'>✓ ETSAM {installed} is installed.</span>")
+        elif state == "outdated":
+            message = etsam_env.UPDATE_MESSAGE.format(installed=installed or "(unknown version)",
+                                                      plugin=__version__)
+            self._set_setup(f"<span style='color:{WARN}'>{html.escape(message)}</span>")
+        else:
+            message = etsam_env.INSTALL_MESSAGE if etsam_env.can_install() else etsam_env.NOT_FOUND
+            self._set_setup(f"<span style='color:{WARN}'>{message}</span>")
 
-    def _on_setup_error(self, exc):
+    def _on_setup_error(self, exc, update):
         self.etsam_ready = False
-        self.install_btn.setVisible(etsam_env.can_install())
+        if update:
+            self.update_btn.show()
+        else:
+            self.install_btn.setVisible(etsam_env.can_install())
         first = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
         self._set_setup(
-            f"<span style='color:{ERR}'>{first}</span> "
+            f"<span style='color:{ERR}'>{html.escape(first)}</span> "
             f"<a href='{etsam_env.INSTALL_DOCS}'>Installation guide</a>"
         )
         if getattr(exc, "error_type", "") != "NotFound":
-            self._show_error("Installing ETSAM failed", str(exc), exc)
+            title = "Updating ETSAM failed" if update else "Installing ETSAM failed"
+            self._show_error(title, str(exc), exc)
 
     # ----------------------------------------------------------------- run --
     def _run(self):

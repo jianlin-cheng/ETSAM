@@ -10,7 +10,9 @@ change with ``listener(event, *args)``:
 
 * ``"status"``                   busy state changed
 * ``"setup", state, message``    ETSAM environment: checking, installing, ready,
-                                 missing (no installer for this computer) or failed
+                                 missing (no installer for this computer), failed,
+                                 outdated (older than this plugin), updating or
+                                 update failed
 * ``"progress", fraction, text`` segmentation progress
 * ``"done", result``             a volume was segmented (a Result)
 * ``"failed", exc``              segmentation failed (etsam_run.Cancelled if cancelled)
@@ -25,12 +27,17 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 
 import numpy as np
 from chimerax.core.settings import Settings
 
 from . import etsam_env, etsam_run
 
+try:
+    PLUGIN_VERSION = version("ChimeraX-ETSAM")
+except PackageNotFoundError:
+    PLUGIN_VERSION = "unknown"
 RESULT_COLOR = "#e8a33d"  # membranes: warm gold, visible on grey tomograms
 DEFAULT_THRESHOLD = -0.25
 NORMALIZATIONS = ["min_max_positive_values", "softplus_minmax"]
@@ -153,45 +160,77 @@ class ETSAMManager:
 
     @property
     def busy(self) -> bool:
-        return self.running or self.setup_state in ("checking", "installing")
+        return self.running or self.setup_state in ("checking", "installing", "updating")
 
     # -- ETSAM environment ----------------------------------------------------
 
-    def ensure_etsam(self, install=False):
-        """Find ETSAM; install only after the user clicks Install ETSAM."""
+    def ensure_etsam(self, install=False, update=False):
+        """Find ETSAM and check its version; install or update it only after the user
+        clicks Install ETSAM or Update ETSAM."""
         if self.busy or self.setup_state == "ready":
             return
         self._set_setup("checking", "")
 
         def work():
             try:
-                if etsam_env.find_python():
-                    self._on_main(self._set_setup, "ready", "")
-                    return
-                if not etsam_env.can_install():
-                    self._on_main(self._set_setup, "missing", etsam_env.NOT_FOUND)
-                    return
-                if not install:
-                    self._on_main(self._set_setup, "missing", etsam_env.INSTALL_MESSAGE)
-                    return
-                report = lambda message: self._on_main(self._set_setup, "installing", message)
-                report("Installing ETSAM (first start)…")
-                etsam_env.install(log=report)
-                self._on_main(self._set_setup, "ready", "✓ ETSAM is installed.")
+                python = etsam_env.find_python()
+                if python is None:
+                    if not etsam_env.can_install():
+                        self._on_main(self._set_setup, "missing", etsam_env.NOT_FOUND)
+                        return
+                    if not install:
+                        self._on_main(self._set_setup, "missing", etsam_env.INSTALL_MESSAGE)
+                        return
+                    report = lambda message: self._on_main(self._set_setup, "installing", message)
+                    report("Installing ETSAM (first start)…")
+                    python = etsam_env.install(log=report)
+                # The plugin can only be used with an ETSAM at least as new as itself.
+                installed = etsam_env.etsam_version(python)
+                if etsam_env.needs_update(PLUGIN_VERSION, installed):
+                    if not update:
+                        message = etsam_env.UPDATE_MESSAGE.format(
+                            installed=installed or "(unknown version)", plugin=PLUGIN_VERSION
+                        )
+                        self._on_main(self._set_setup, "outdated", message)
+                        return
+                    report = lambda message: self._on_main(self._set_setup, "updating", message)
+                    report("Updating ETSAM to the latest release…")
+                    etsam_env.update(python, log=report)
+                    installed = etsam_env.etsam_version(python)
+                    if etsam_env.needs_update(PLUGIN_VERSION, installed):
+                        raise RuntimeError(
+                            f"The latest ETSAM release ({installed}) is older than this plugin."
+                        )
+                self._on_main(self._set_setup, "ready", f"✓ ETSAM {installed} is installed.")
             except Exception as e:
-                self._on_main(self._set_setup, "failed", f"Installing ETSAM failed: {e}")
+                if update:
+                    self._on_main(self._set_setup, "update failed", f"Updating ETSAM failed: {e}")
+                else:
+                    self._on_main(self._set_setup, "failed", f"Installing ETSAM failed: {e}")
 
         threading.Thread(target=work, name="ETSAM setup", daemon=True).start()
+
+    def _require_current_etsam(self):
+        """Refuse to segment with an ETSAM older than this plugin (e.g. from a command)."""
+        python = etsam_env.find_python()
+        if python is None:
+            return  # reported when the worker starts
+        installed = etsam_env.etsam_version(python)
+        if etsam_env.needs_update(PLUGIN_VERSION, installed):
+            raise RuntimeError(
+                f"ETSAM {installed or '(unknown version)'} is older than this plugin "
+                f"({PLUGIN_VERSION}). Update it with Update ETSAM in the ETSAM panel first."
+            )
 
     def _set_setup(self, state, message):
         self.setup_state, self.setup_message = state, message
         logger = self.session.logger
         first = message.splitlines()[0] if message else ""
-        if state == "failed":
+        if state in ("failed", "update failed", "outdated"):
             logger.info(_red(html.escape(f"ETSAM: {message}")), is_html=True)
-        elif first and state in ("installing", "ready"):
+        elif first and state in ("installing", "updating", "ready"):
             logger.status(f"ETSAM: {first}", secondary=True)
-            if state == "ready" or first.startswith("Installing ETSAM"):
+            if state == "ready" or first.startswith(("Installing ETSAM", "Updating ETSAM")):
                 logger.info(f"ETSAM: {first}")
         self._notify("setup", state, message)
         self._notify("status")
@@ -213,6 +252,8 @@ class ETSAMManager:
         """Segment one open volume; the result is added as new volumes in ChimeraX."""
         if self.busy:
             raise RuntimeError("ETSAM is busy; wait for it to finish or cancel it.")
+        if self.setup_state != "ready":
+            self._require_current_etsam()
         options = options or self.options()
         array = np.asarray(volume.full_matrix())
         if array.ndim != 3 or min(array.shape) < 2:
