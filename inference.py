@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from PIL import Image
 from sam2.build_sam import build_sam2_video_predictor
+from sam2.utils.misc import PrefetchFrameLoader, TomogramFrameLoader
 
 CHECKPOINT_PATH = "checkpoints/etsam_stage1_v1.pt"
 CONFIG_PATH = "configs/sam2.1/sam2.1_hiera_b+.yaml"
@@ -102,7 +103,22 @@ def vos_inference(
         offload_video_to_cpu=offload_video_to_cpu,
         offload_state_to_cpu=offload_state_to_cpu,
     )
+    frames = inference_state["images"]
+    if inference_state["device"].type == "cuda" and isinstance(frames, TomogramFrameLoader):
+        # Prepare the next frame on the CPU while the GPU tracks the current one.
+        frames = inference_state["images"] = PrefetchFrameLoader(frames)
+    try:
+        return _prompt_and_propagate(
+            predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress, output
+        )
+    finally:
+        if isinstance(frames, PrefetchFrameLoader):
+            frames.close()
 
+
+def _prompt_and_propagate(
+    predictor, inference_state, etsam1_seg_mask, prompt_method, grid_interval, progress, output
+):
     # print(inference_state["images"].shape)
     height = inference_state["video_height"]
     width = inference_state["video_width"]

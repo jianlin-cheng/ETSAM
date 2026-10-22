@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 import inference
-from sam2.utils.misc import load_video_frames_from_numpy_array_as_float_numpy
+from sam2.utils.misc import PrefetchFrameLoader, load_video_frames_from_numpy_array_as_float_numpy
 
 
 class FakePredictor:
@@ -75,6 +75,15 @@ class FrameLoaderTests(unittest.TestCase):
                 self.assertEqual((len(frames), height, width), (6, 17, 21))
                 for index in (5, 0, 3, 0):
                     self.assertTrue(torch.equal(frames[index], video[index]))
+
+    def test_prefetching_returns_the_requested_frames(self):
+        volume = np.arange(6 * 4 * 4, dtype=np.float32).reshape(6, 4, 4)
+        frames = PrefetchFrameLoader(volume)
+        try:
+            for index in (0, 3, 1, 2, 3, 3, 5, 0, 1):
+                np.testing.assert_array_equal(frames[index], volume[index])
+        finally:
+            frames.close()
 
 
 if __name__ == "__main__":

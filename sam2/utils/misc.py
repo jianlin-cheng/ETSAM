@@ -7,6 +7,7 @@
 
 import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 
 import numpy as np
@@ -436,6 +437,41 @@ class TomogramFrameLoader:
         image -= self.img_mean
         image /= self.img_std
         return image
+
+
+class PrefetchFrameLoader:
+    """Prepares the frame after the one just read in a background thread.
+
+    Frames are read in order while tracking, so preparing the next one (reading,
+    normalizing and resizing it) overlaps with the GPU work on the current one.
+    A read out of order (such as a prompt frame) is prepared directly.
+    close() waits for the background thread.
+    """
+
+    def __init__(self, frames):
+        self.frames = frames
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="etsam-prefetch")
+        self.next_index = None
+        self.next_frame = None
+
+    def __len__(self):
+        return len(self.frames)
+
+    def __getitem__(self, index):
+        if index == self.next_index:
+            frame = self.next_frame.result()
+        else:
+            if self.next_frame is not None:
+                self.next_frame.cancel()
+            frame = self.frames[index]
+        self.next_index = index + 1
+        self.next_frame = None
+        if self.next_index < len(self.frames):
+            self.next_frame = self.executor.submit(self.frames.__getitem__, self.next_index)
+        return frame
+
+    def close(self):
+        self.executor.shutdown(wait=True, cancel_futures=True)
 
 
 def load_video_frames_from_numpy_array_as_float_numpy(
