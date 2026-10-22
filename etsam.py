@@ -25,8 +25,8 @@ from rich.text import Text
 
 import inference
 import postprocess
+from sam2.utils.volume import FusedTomogram, NormalizedTomogram, StageOneLogits
 
-MEMBRANE_OBJECT_ID = 1
 CONFIG = "configs/sam2.1/sam2.1_hiera_b+.yaml"
 CHECKPOINT_URL = "https://zenodo.org/records/17571925/files/{}"
 CHECKPOINT_MD5 = {
@@ -51,8 +51,12 @@ def min_max_postive_values_normalize(array):
 
 
 def softplus_minmax_normalize(array):
-    array = torch.nn.functional.softplus(torch.from_numpy(array)).cpu().numpy()
-    array = (array - np.min(array)) / (np.max(array) - np.min(array))
+    """Normalize a float32 array in place and return it."""
+    tensor = torch.from_numpy(array)
+    torch.ops.aten.softplus.out(tensor, 1, 20, out=tensor)  # softplus(beta=1, threshold=20)
+    minimum, maximum = np.min(array), np.max(array)
+    array -= minimum
+    array /= maximum - minimum
     return array
 
 
@@ -100,17 +104,28 @@ def run_two_stage_inference_on_tomogram(
     stage1_logit_threshold,
     device="cuda",
     progress=None,
+    output=None,
 ):
     """
     Run the two-stage ETSAM pipeline on a (Z, Y, X) volume (full tomogram or a sub-region).
 
-    Normalizes the volume, runs stage 1, fuses logits with the normalized tomogram, then runs stage 2.
+    Runs stage 1 on the normalized volume, fuses its logits with the volume, then runs stage 2.
 
-    Returns the stage-2 logits array matching the input spatial shape.
+    Writes the stage-2 logits into output, a float32 array matching the input
+    spatial shape (allocated if None), and returns it. Stage 1 stores its
+    logits in output too: stage 2 overwrites each slice after reading it.
     progress(stage, slices_done, total_slices) is called after each slice.
     """
+    if output is None:
+        output = np.empty(tomogram_data.shape, dtype=np.float32)
+    stage1_logits = StageOneLogits(
+        output,
+        prompt_interval=grid_interval if stage2_prompt == "etsam_stage1_partial" else None,
+        prompt_threshold=stage1_logit_threshold,
+    )
+
     print(f"==> Stage 1 prediction (prompt: {stage1_prompt})")
-    stage1_logits = inference.etsam_inference(
+    inference.etsam_inference(
         tomogram_data,
         config_path=config,
         ckpt_path=stage1_ckpt_path,
@@ -118,40 +133,26 @@ def run_two_stage_inference_on_tomogram(
         grid_interval=grid_interval,
         device=device,
         progress=None if progress is None else lambda done, total: progress(1, done, total),
-    )[MEMBRANE_OBJECT_ID]
+        output=stage1_logits,
+    )
 
-    stage1_mask = (stage1_logits > stage1_logit_threshold).astype(np.uint8)
-    stage1_logits[stage1_logits < -5] = -5
-    stage1_logits[stage1_logits > 5] = 5
-    stage1_logits = min_max_normalize(stage1_logits)
-    combined_input = tomogram_data + stage1_logits
+    # Fused slice by slice, when the stage-2 predictor reads them.
+    combined_input = FusedTomogram(tomogram_data, stage1_logits)
 
     print(f"==> Stage 2 prediction (prompt: {stage2_prompt})")
-    stage2_logits = inference.etsam_inference(
+    inference.etsam_inference(
         combined_input,
-        stage1_mask,
+        stage1_logits.prompts,
         config_path=config,
         ckpt_path=stage2_ckpt_path,
         prompt_method=stage2_prompt,
         grid_interval=grid_interval,
         device=device,
         progress=None if progress is None else lambda done, total: progress(2, done, total),
-    )[MEMBRANE_OBJECT_ID]
+        output=output,
+    )
 
-    return stage2_logits
-
-
-def combine_quadrant_logits(quadrant_results, full_shape):
-    """
-    Assemble per-quadrant logit arrays into a single (Z, Y, X) volume.
-
-    quadrant_results: list of (logits, (y_start, y_end, x_start, x_end))
-    full_shape: (Z, Y, X) of the original tomogram
-    """
-    combined = np.zeros(full_shape, dtype=np.float32)
-    for logits, (y_start, y_end, x_start, x_end) in quadrant_results:
-        combined[:, y_start:y_end, x_start:x_end] = logits
-    return combined
+    return output
 
 
 def ensure_checkpoints(progress=None):
@@ -327,13 +328,13 @@ def segment(
     stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     grid_interval = 10 if split_processing else 50
-    tomogram_data = np.array(tomogram_data, dtype=np.float32)
 
     print(f"==> Normalizing tomogram data with {normalize_method} method")
     if normalize_method == "min_max_positive_values":
-        normalized_tomogram_data = min_max_postive_values_normalize(tomogram_data)
+        # Normalized slice by slice, when the predictor reads them.
+        normalized_tomogram_data = NormalizedTomogram(tomogram_data)
     elif normalize_method == "softplus_minmax":
-        normalized_tomogram_data = softplus_minmax_normalize(tomogram_data)
+        normalized_tomogram_data = softplus_minmax_normalize(np.array(tomogram_data, dtype=np.float32))
 
     if split_processing:
         quadrants = split_into_quadrants(normalized_tomogram_data)
@@ -347,7 +348,7 @@ def segment(
         quadrants = [(normalized_tomogram_data, None)]
         quadrant_labels = [""]
 
-    quadrant_results = []
+    logits = np.empty(tomogram_data.shape, dtype=np.float32)
     for i, (label, (sub_tomogram, coords)) in enumerate(zip(quadrant_labels, quadrants)):
         if split_processing:
             print(f"\n==> Processing quadrant: {label}")
@@ -358,7 +359,12 @@ def segment(
                 fraction = (2 * i + stage - 1 + done / total) / (2 * len(quadrants))
                 progress(fraction, f"{prefix}Stage {stage} · slice {done}/{total}")
 
-        q_logits = run_two_stage_inference_on_tomogram(
+        if coords is None:
+            output = logits
+        else:
+            y_start, y_end, x_start, x_end = coords
+            output = logits[:, y_start:y_end, x_start:x_end]
+        run_two_stage_inference_on_tomogram(
             sub_tomogram,
             CONFIG,
             stage1_ckpt_path,
@@ -369,13 +375,10 @@ def segment(
             stage1_logit_threshold=-0.25,
             device=device,
             progress=slice_progress,
+            output=output,
         )
-        quadrant_results.append((q_logits, coords))
 
-    if not split_processing:
-        return quadrant_results[0][0]
-    print("\n==> Combining quadrant logits into full volume")
-    return combine_quadrant_logits(quadrant_results, tomogram_data.shape)
+    return logits
 
 
 BLUE = "#29abe2"
@@ -544,13 +547,21 @@ def main():
 
     try:
         print("==> Reading input tomogram:", input_tomogram_file_path)
-        with mrcfile.open(input_tomogram_file_path) as mrc:
-            voxel_size = mrc.voxel_size
+        with mrcfile.mmap(input_tomogram_file_path, mode="r") as mrc:
+            voxel_size = mrc.voxel_size.copy()
             input_tomogram_shape = mrc.data.shape
-            tomogram_data = mrc.data.copy()
-        if not torch.cuda.is_available():
-            print("Warning: no CUDA GPU found, running on the CPU (very slow)")
-        print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
+            if not torch.cuda.is_available():
+                print("Warning: no CUDA GPU found, running on the CPU (very slow)")
+            print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
+
+            # The tomogram stays memory-mapped: its slices are read as needed.
+            logits = segment(
+                mrc.data,
+                normalize_method,
+                split_processing,
+                stage1_prompt,
+                stage2_prompt,
+            )
 
         if split_processing:
             output_mask_file_path = os.path.join(
@@ -578,14 +589,6 @@ def main():
                 output_dir,
                 f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc",
             )
-
-        logits = segment(
-            tomogram_data,
-            normalize_method,
-            split_processing,
-            stage1_prompt,
-            stage2_prompt,
-        )
 
         mask = (logits > stage2_logit_threshold).astype(np.uint8)
 

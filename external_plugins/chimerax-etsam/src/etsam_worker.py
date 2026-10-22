@@ -88,8 +88,8 @@ def _friendly(e):
         )
     if isinstance(e, MemoryError):
         return (
-            "Not enough RAM to segment this tomogram (ETSAM needs about 15-25 GB for a "
-            "1000 x 1000 x 500 tomogram). Close other programs or bin the tomogram."
+            "Not enough RAM to segment this tomogram. Close other programs or bin "
+            "the tomogram."
         )
     if isinstance(e, PermissionError):
         return f"{text}. Choose another output folder."
@@ -103,7 +103,7 @@ def segment_array(args):
 
     device, name, accelerated = _device()
     emit("start", device=device, device_name=name, accelerated=accelerated)
-    data = np.load(args.input)
+    data = np.load(args.input, mmap_mode="r")  # slices are read as needed
     if data.ndim != 3:
         raise ValueError(f"ETSAM needs a 3D tomogram (Z, Y, X), but got shape {data.shape}.")
     last = [0.0]

@@ -186,7 +186,8 @@ def load_video_frames(
     Load the video frames from video_path. The frames are resized to image_size as in
     the model and are loaded to GPU if offload_video_to_cpu=False. This is used by the demo.
     """
-    is_numpy = isinstance(video_path, np.ndarray)
+    # NumPy arrays, or volumes indexed like them (see sam2.utils.volume)
+    is_numpy = hasattr(video_path, "shape")
     is_bytes = isinstance(video_path, bytes)
     is_str = isinstance(video_path, str)
     is_mp4_path = is_str and os.path.splitext(video_path)[-1] in [".mp4", ".MP4"]

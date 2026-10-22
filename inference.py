@@ -55,8 +55,11 @@ def load_video_frames_from_tomogram_data(
 
 
 def _write_slice(result, index, logits):
-    # Copy straight from the model into the result, without a CPU array in between.
-    torch.from_numpy(result[index]).copy_(logits)
+    if isinstance(result, np.ndarray):
+        # Copy straight from the model into the result, without a CPU array in between.
+        torch.from_numpy(result[index]).copy_(logits)
+    else:
+        result[index] = logits.cpu().numpy()
 
 
 def _forget_expired_frames(predictor, inference_state, frame_idx):
@@ -87,6 +90,7 @@ def vos_inference(
     offload_state_to_cpu=True,
     grid_interval=50,
     progress=None,
+    output=None,
 ):
     print("==> Preprocessing the input map")
 
@@ -276,13 +280,17 @@ def vos_inference(
 
     # run propagation throughout the video and write each slice into the result
     print("==> Running ETSAM inference on preprocessed map")
+    if output is not None and len(object_ids_set) != 1:
+        raise ValueError("output can only hold the result of a single object")
     per_obj_output_mask_full = {}
     for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(
         inference_state
     ):
         for i, out_obj_id in enumerate(out_obj_ids):
             if out_obj_id not in per_obj_output_mask_full:
-                per_obj_output_mask_full[out_obj_id] = np.empty((num_frames, height, width), dtype=np.float32)
+                per_obj_output_mask_full[out_obj_id] = (
+                    output if output is not None else np.empty((num_frames, height, width), dtype=np.float32)
+                )
             _write_slice(per_obj_output_mask_full[out_obj_id], out_frame_idx, out_mask_logits[i, 0])
         _forget_expired_frames(predictor, inference_state, out_frame_idx)
         if progress is not None:
@@ -313,10 +321,13 @@ def etsam_inference(
     grid_interval=50,
     device="cuda",
     progress=None,
+    output=None,
 ):
     """Run ETSAM inference on a single tomogram.
 
     progress(slices_done, total_slices) is called after each slice.
+    output optionally receives the (num_frames, H, W) logits, one slice at a time:
+    an array, or any object that accepts output[index] = slice.
     """
     hydra_overrides_extra = [
         "++model.non_overlap_masks=false"
@@ -344,4 +355,5 @@ def etsam_inference(
         offload_state_to_cpu=offload_state_to_cpu,
         grid_interval=grid_interval,
         progress=progress,
+        output=output,
     )
