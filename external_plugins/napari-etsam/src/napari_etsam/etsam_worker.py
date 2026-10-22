@@ -19,6 +19,7 @@ import sys
 sys.path.pop(0)
 
 import argparse  # noqa: E402
+import inspect  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
 import time  # noqa: E402
@@ -115,6 +116,9 @@ def segment_array(args):
             emit("progress", fraction=round(fraction, 4), message=message)
 
     started = time.monotonic()
+    # Newer ETSAM writes the logits straight to the output file; older ETSAM
+    # returns them in RAM.
+    to_file = "output_path" in inspect.signature(etsam.segment).parameters
     logits = etsam.segment(
         data,
         normalize_method=args.normalize_method,
@@ -122,10 +126,13 @@ def segment_array(args):
         stage1_prompt=args.stage1_prompt,
         stage2_prompt=args.stage2_prompt,
         progress=progress,
+        **({"output_path": args.output} if to_file else {}),
     )
     del data
     emit("progress", fraction=1.0, message="Saving result")
-    np.save(args.output, np.asarray(logits, dtype=np.float32))
+    if not to_file:
+        np.save(args.output, np.asarray(logits, dtype=np.float32))
+    del logits
     emit("done", output=args.output, seconds=round(time.monotonic() - started, 1))
 
 

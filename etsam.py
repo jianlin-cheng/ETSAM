@@ -10,6 +10,7 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from functools import lru_cache
 from importlib.resources import files
 
@@ -25,7 +26,9 @@ from rich.text import Text
 
 import inference
 import postprocess
-from sam2.utils.disk_volume import read_by_slice, scratch_volume, writable_array
+from sam2.utils.disk_volume import (
+    DiskVolume, npy_output, read_by_slice, replace_on_success, scratch_volume, writable_array,
+)
 from sam2.utils.volume import FusedTomogram, NormalizedTomogram, StageOneLogits
 
 CONFIG = "configs/sam2.1/sam2.1_hiera_b+.yaml"
@@ -77,12 +80,43 @@ def save_mask(mask, voxel_size, output_map_file_path):
         mrc.voxel_size = voxel_size
 
 
-def save_logits(logits, voxel_size, output_map_file_path):
-    with mrcfile.new_mmap(
-        output_map_file_path, shape=logits.shape, mrc_mode=2, fill=0, overwrite=True
-    ) as mrc:
-        mrc.set_data(logits)
-        mrc.voxel_size = voxel_size
+@contextmanager
+def mrc_logits_output(path, shape, voxel_size):
+    """A float32 DiskVolume stored in a new MRC file (see replace_on_success).
+
+    The header statistics are computed slice by slice when the with block ends.
+    """
+    with replace_on_success(path) as temporary:
+        with mrcfile.new_mmap(temporary, shape=shape, mrc_mode=2, fill=None, overwrite=True) as mrc:
+            offset = mrc.header.nbytes + mrc.extended_header.nbytes
+        with open(temporary, "r+b") as file:
+            logits = DiskVolume(file, shape, offset=offset)
+            yield logits
+            minimum, maximum, mean, rms = _statistics(logits)
+        with mrcfile.mmap(temporary, mode="r+") as mrc:
+            mrc.header.dmin, mrc.header.dmax, mrc.header.dmean, mrc.header.rms = minimum, maximum, mean, rms
+            mrc.voxel_size = voxel_size
+
+
+def _statistics(volume):
+    """Minimum, maximum, mean and RMS deviation, accumulated slice by slice in float64."""
+    minimum, maximum, total, squares = np.inf, -np.inf, 0.0, 0.0
+    for index in range(len(volume)):
+        frame = volume[index].astype(np.float64)
+        minimum, maximum = min(minimum, frame.min()), max(maximum, frame.max())
+        total += frame.sum()
+        squares += np.square(frame).sum()
+    count = np.prod(volume.shape)
+    mean = total / count
+    return minimum, maximum, mean, np.sqrt(max(squares / count - mean * mean, 0.0))
+
+
+def threshold_mask(logits, threshold):
+    """The uint8 mask logits > threshold, computed slice by slice."""
+    mask = np.empty(logits.shape, dtype=np.uint8)
+    for index in range(len(logits)):
+        mask[index] = logits[index] > threshold
+    return mask
 
 
 def split_into_quadrants(tomogram_data):
@@ -338,16 +372,48 @@ def segment(
     *,
     output_type="logits",
     logit_threshold=-0.25,
+    output_path=None,
 ):
     """
     Run ETSAM on a (Z, Y, X) tomogram array and return the stage-2 logits.
 
     output_type="mask" returns the uint8 mask (logits > logit_threshold) instead,
     which takes a quarter of the memory.
+    output_path writes the logits to a new .npy file instead of RAM, replacing
+    an existing file only if segmentation succeeds, and returns them memory-mapped.
     progress(fraction, message) is called after each slice; raise from it to cancel.
     """
     if output_type not in ("logits", "mask"):
         raise ValueError(f"Unknown output type: {output_type}")
+    arguments = (tomogram_data, normalize_method, split_processing, stage1_prompt, stage2_prompt, progress)
+    if output_path is not None:
+        if output_type != "logits":
+            raise ValueError("output_path stores logits only")
+        with npy_output(output_path, tomogram_data.shape) as logits:
+            segment_into(logits, *arguments)
+        return np.load(output_path, mmap_mode="r")
+    if output_type == "mask":
+        mask = np.empty(tomogram_data.shape, dtype=np.uint8)
+        return segment_into(mask, *arguments, mask_threshold=logit_threshold)
+    return segment_into(np.empty(tomogram_data.shape, dtype=np.float32), *arguments)
+
+
+def segment_into(
+    result,
+    tomogram_data,
+    normalize_method="min_max_positive_values",
+    split_processing=False,
+    stage1_prompt="grid_zero",
+    stage2_prompt="zero",
+    progress=None,
+    mask_threshold=None,
+):
+    """
+    Run ETSAM on a (Z, Y, X) tomogram array and write the stage-2 logits into
+    result, a float32 array or DiskVolume of the same shape, and return it.
+
+    With mask_threshold, result is a uint8 array for the mask (logits > mask_threshold).
+    """
     stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     grid_interval = 10 if split_processing else 50
@@ -374,7 +440,6 @@ def segment(
         quadrants = [(normalized_tomogram_data, None)]
         quadrant_labels = [""]
 
-    result = np.empty(tomogram_data.shape, dtype=np.uint8 if output_type == "mask" else np.float32)
     for i, (label, (sub_tomogram, coords)) in enumerate(zip(quadrant_labels, quadrants)):
         if split_processing:
             print(f"\n==> Processing quadrant: {label}")
@@ -402,7 +467,7 @@ def segment(
             device=device,
             progress=slice_progress,
             output=output,
-            mask_threshold=logit_threshold if output_type == "mask" else None,
+            mask_threshold=mask_threshold,
         )
 
     return result
@@ -573,25 +638,6 @@ def main():
     normalize_method = args.normalize_method
 
     try:
-        print("==> Reading input tomogram:", input_tomogram_file_path)
-        with mrcfile.mmap(input_tomogram_file_path, mode="r") as mrc:
-            voxel_size = mrc.voxel_size.copy()
-            input_tomogram_shape = mrc.data.shape
-            if not torch.cuda.is_available():
-                print("Warning: no CUDA GPU found, running on the CPU (very slow)")
-            print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
-
-            # The tomogram stays memory-mapped: its slices are read as needed.
-            result = segment(
-                mrc.data,
-                normalize_method,
-                split_processing,
-                stage1_prompt,
-                stage2_prompt,
-                output_type="logits" if store_logits else "mask",
-                logit_threshold=stage2_logit_threshold,
-            )
-
         if split_processing:
             output_mask_file_path = os.path.join(
                 output_dir,
@@ -618,21 +664,29 @@ def main():
                 output_dir,
                 f"{os.path.basename(input_tomogram_file_path).split('.')[0]}_etsam_predicted_post_processed_mask.mrc",
             )
+        os.makedirs(output_dir, exist_ok=True)
 
-        if store_logits:
-            logits = result
-            mask = (logits > stage2_logit_threshold).astype(np.uint8)
-        else:
-            mask = result  # thresholded during inference, without keeping the logits
+        print("==> Reading input tomogram:", input_tomogram_file_path)
+        with mrcfile.mmap(input_tomogram_file_path, mode="r") as mrc:
+            voxel_size = mrc.voxel_size.copy()
+            input_tomogram_shape = mrc.data.shape
+            if not torch.cuda.is_available():
+                print("Warning: no CUDA GPU found, running on the CPU (very slow)")
+            print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
+
+            # The tomogram stays memory-mapped: its slices are read as needed.
+            arguments = (mrc.data, normalize_method, split_processing, stage1_prompt, stage2_prompt)
+            if store_logits:
+                print("==> Writing segmentation logits to", output_logits_file_path)
+                with mrc_logits_output(output_logits_file_path, input_tomogram_shape, voxel_size) as logits:
+                    segment_into(logits, *arguments)
+                    mask = threshold_mask(logits, stage2_logit_threshold)
+            else:
+                # Thresholded during inference, without keeping the logits.
+                mask = segment(*arguments, output_type="mask", logit_threshold=stage2_logit_threshold)
 
         print("==> Saving predicted mask")
-        os.makedirs(output_dir, exist_ok=True)
         save_mask(mask, voxel_size, output_mask_file_path)
-
-        if store_logits:
-            print("==> Saving segmentation logits")
-            os.makedirs(os.path.dirname(output_logits_file_path), exist_ok=True)
-            save_logits(logits, voxel_size, output_logits_file_path)
 
         if postprocess.postprocess_requested(args):
             post_processed_mask = postprocess.postprocess_cli(mask, args)

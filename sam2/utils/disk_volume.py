@@ -157,3 +157,31 @@ def writable_array(volume):
     finally:
         array.flush()
         array._mmap.close()
+
+
+@contextmanager
+def replace_on_success(path):
+    """A temporary path next to `path` that replaces it when the with block succeeds.
+
+    If the block fails, the temporary file is deleted and `path` is left as it was.
+    """
+    directory, name = os.path.split(os.path.abspath(path))
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{name}.", dir=directory)
+    os.close(descriptor)
+    try:
+        yield temporary
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+
+
+@contextmanager
+def npy_output(path, shape):
+    """A float32 DiskVolume stored in a new .npy file (see replace_on_success)."""
+    with replace_on_success(path) as temporary, open(temporary, "w+b") as file:
+        header = {"descr": "<f4", "fortran_order": False, "shape": tuple(shape)}
+        np.lib.format.write_array_header_1_0(file, header)
+        offset = file.tell()
+        file.truncate(offset + int(np.prod(shape)) * 4)
+        yield DiskVolume(file, shape, offset=offset)
