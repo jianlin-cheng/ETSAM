@@ -266,7 +266,10 @@ class RoPEAttention(Attention):
         self.compute_cis = partial(
             compute_axial_cis, dim=self.internal_dim // self.num_heads, theta=rope_theta
         )
-        freqs_cis = self.compute_cis(end_x=feat_sizes[0], end_y=feat_sizes[1])
+        # These small, non-parameter constants must be real tensors even when
+        # checkpoint-backed parameters are constructed on the meta device.
+        with torch.device("cpu"):
+            freqs_cis = self.compute_cis(end_x=feat_sizes[0], end_y=feat_sizes[1])
         self.freqs_cis = (
             freqs_cis.to("cuda") if torch.cuda.is_available() else freqs_cis
         )

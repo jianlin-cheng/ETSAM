@@ -6,6 +6,7 @@
 
 import logging
 import os
+import zipfile
 
 import torch
 from hydra import compose
@@ -89,8 +90,7 @@ def build_sam2(
     # Read config and init model
     cfg = compose(config_name=config_file, overrides=hydra_overrides_extra)
     OmegaConf.resolve(cfg)
-    model = instantiate(cfg.model, _recursive_=True)
-    _load_checkpoint(model, ckpt_path)
+    model = _instantiate_with_checkpoint(cfg.model, ckpt_path, mode)
     model = model.to(device)
     if mode == "eval":
         model.eval()
@@ -135,8 +135,7 @@ def build_sam2_video_predictor(
     # Read config and init model
     cfg = compose(config_name=config_file, overrides=hydra_overrides)
     OmegaConf.resolve(cfg)
-    model = instantiate(cfg.model, _recursive_=True)
-    _load_checkpoint(model, ckpt_path)
+    model = _instantiate_with_checkpoint(cfg.model, ckpt_path, mode)
     model = model.to(device)
     if mode == "eval":
         model.eval()
@@ -163,10 +162,31 @@ def build_sam2_video_predictor_hf(model_id, **kwargs):
     )
 
 
-def _load_checkpoint(model, ckpt_path):
+def _instantiate_with_checkpoint(config, ckpt_path, mode):
+    """Build the model and load its checkpoint.
+
+    For inference, the model is first built on the meta device, which allocates
+    and randomly initializes nothing, and then takes the checkpoint tensors as its
+    parameters. A model that still has meta tensors afterwards (state that is not
+    in the checkpoint) is built the usual way.
+    """
+    if mode == "eval" and ckpt_path is not None:
+        with torch.device("meta"):
+            model = instantiate(config, _recursive_=True)
+        _load_checkpoint(model, ckpt_path, assign=True)
+        if not any(t.is_meta for t in (*model.parameters(), *model.buffers())):
+            return model
+    model = instantiate(config, _recursive_=True)
+    _load_checkpoint(model, ckpt_path)
+    return model
+
+
+def _load_checkpoint(model, ckpt_path, assign=False):
     if ckpt_path is not None:
-        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)["model"]
-        missing_keys, unexpected_keys = model.load_state_dict(sd)
+        # Memory-map the checkpoint (zip format only) instead of reading a copy.
+        mmap = zipfile.is_zipfile(ckpt_path)
+        sd = torch.load(ckpt_path, map_location="cpu", weights_only=True, mmap=mmap)["model"]
+        missing_keys, unexpected_keys = model.load_state_dict(sd, assign=assign)
         if missing_keys:
             logging.error(missing_keys)
             raise RuntimeError()
