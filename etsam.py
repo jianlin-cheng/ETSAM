@@ -75,24 +75,27 @@ def softplus_minmax_volume(tomogram):
 
 
 def save_mask(mask, voxel_size, output_map_file_path):
-    with mrcfile.new(output_map_file_path, overwrite=True) as mrc:
-        mrc.set_data(mask.astype(np.uint8, copy=False))
-        mrc.voxel_size = voxel_size
+    # Slice by slice: mrcfile's set_data would make a uint16 (MRC mode 6) copy
+    # of the whole mask and whole-volume temporaries for its statistics.
+    with mrc_output(output_map_file_path, mask.shape, voxel_size, mrc_mode=6) as output:
+        for index in range(len(mask)):
+            output[index] = mask[index]
 
 
 @contextmanager
-def mrc_logits_output(path, shape, voxel_size):
-    """A float32 DiskVolume stored in a new MRC file (see replace_on_success).
-
-    The header statistics are computed slice by slice when the with block ends.
+def mrc_output(path, shape, voxel_size, mrc_mode=2):
+    """A DiskVolume stored in a new MRC file (see replace_on_success); mode 2
+    stores float32 values. The header statistics are computed slice by slice
+    when the with block ends.
     """
     with replace_on_success(path) as temporary:
-        with mrcfile.new_mmap(temporary, shape=shape, mrc_mode=2, fill=None, overwrite=True) as mrc:
+        with mrcfile.new_mmap(temporary, shape=shape, mrc_mode=mrc_mode, fill=None, overwrite=True) as mrc:
             offset = mrc.header.nbytes + mrc.extended_header.nbytes
+            dtype = mrc.data.dtype
         with open(temporary, "r+b") as file:
-            logits = DiskVolume(file, shape, offset=offset)
-            yield logits
-            minimum, maximum, mean, rms = _statistics(logits)
+            volume = DiskVolume(file, shape, dtype, offset)
+            yield volume
+            minimum, maximum, mean, rms = _statistics(volume)
         with mrcfile.mmap(temporary, mode="r+") as mrc:
             mrc.header.dmin, mrc.header.dmax, mrc.header.dmean, mrc.header.rms = minimum, maximum, mean, rms
             mrc.voxel_size = voxel_size
@@ -678,7 +681,7 @@ def main():
             arguments = (mrc.data, normalize_method, split_processing, stage1_prompt, stage2_prompt)
             if store_logits:
                 print("==> Writing segmentation logits to", output_logits_file_path)
-                with mrc_logits_output(output_logits_file_path, input_tomogram_shape, voxel_size) as logits:
+                with mrc_output(output_logits_file_path, input_tomogram_shape, voxel_size) as logits:
                     segment_into(logits, *arguments)
                     mask = threshold_mask(logits, stage2_logit_threshold)
             else:
