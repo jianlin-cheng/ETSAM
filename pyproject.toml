@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "etsam"
-version = "2.0.0"
+version = "2.0.1"
 description = "ETSAM: Effectively Segmenting Membranes in cryo-Electron Tomograms"
 readme = "README.md"
 license = "MIT"
