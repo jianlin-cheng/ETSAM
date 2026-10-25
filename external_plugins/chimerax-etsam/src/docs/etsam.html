@@ -30,7 +30,9 @@ Keep ChimeraX open until installation finishes; the tool shows progress.
 ETSAM goes into <code>~/etsam_env</code> (on Windows, <code>%USERPROFILE%\etsam_env</code>).
 </p>
 <p>
-ETSAM requires <b>Linux or Windows and an NVIDIA GPU</b>. macOS is not supported yet. Contributions are welcome to extend hardware/software support.
+ETSAM requires <b>Linux or Windows with an NVIDIA GPU</b>, or <b>a Mac with Apple silicon (M1 or newer) and
+macOS 14 or newer</b>, where it uses the Mac's GPU through Metal (MPS). Intel Macs are not supported.
+Contributions are welcome to extend hardware/software support.
 </p>
 <p>
 An existing installation is used as it is: an installer folder, or a conda environment named <code>etsam</code>.
@@ -90,7 +92,8 @@ also written to the Log.
   <tr><td>The GPU is busy</td><td>Restart ChimeraX. If the message persists, close other programs that use
       the GPU.</td></tr>
   <tr><td>Installing ETSAM failed: … requires an NVIDIA GPU</td>
-      <td>The installer supports NVIDIA GPUs only. Install ETSAM yourself (see above).</td></tr>
+      <td>The installer supports NVIDIA GPUs on Linux and Windows, and Apple silicon Macs with macOS 14 or newer.
+      Install ETSAM yourself (see above).</td></tr>
   <tr><td>Installing ETSAM failed: … the folder already exists</td>
       <td>An earlier installation was interrupted. Delete the <code>etsam</code> folder in your home folder and
       reopen the tool.</td></tr>

@@ -12,7 +12,12 @@ per line on stdout; everything ETSAM prints goes to stderr. Modes::
 Events: start, progress, done; any mode may end with fatal.
 """
 
+import os
 import sys
+
+# Run the few operations that PyTorch's Apple silicon (MPS) backend lacks on the
+# CPU instead of failing (as ETSAM does). PyTorch reads this when it is imported.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 # This file lives inside a plugin package next to modules such as cmd.py;
 # keep them from shadowing standard-library modules in this process.
@@ -21,7 +26,7 @@ sys.path.pop(0)
 import argparse  # noqa: E402
 import inspect  # noqa: E402
 import json  # noqa: E402
-import os  # noqa: E402
+import subprocess  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
 
@@ -46,12 +51,30 @@ def emit(event, **fields):
 
 
 def _device():
+    """The device ETSAM runs on (as etsam.select_device picks it), its name, and
+    whether it is a GPU."""
+    import etsam
     import torch
 
-    if torch.cuda.is_available():
-        props = torch.cuda.get_device_properties(0)
-        return "cuda", f"{props.name} ({props.total_memory / 1024**3:.0f} GB)", True
-    return "cpu", "CPU", False
+    device = etsam.select_device() if hasattr(etsam, "select_device") else (
+        "cuda" if torch.cuda.is_available() else "cpu"
+    )
+    if device.startswith("cuda"):
+        props = torch.cuda.get_device_properties(torch.device(device))
+        return device, f"{props.name} ({props.total_memory / 1024**3:.0f} GB)", True
+    if device == "mps":
+        return device, f"{_apple_chip()} GPU (Metal)", True
+    return device, "CPU", False
+
+
+def _apple_chip():
+    """The Mac's chip, such as "Apple M2 Pro"."""
+    try:
+        out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                             text=True, timeout=10)
+        return out.stdout.strip() or "Apple silicon"
+    except (OSError, subprocess.SubprocessError):
+        return "Apple silicon"
 
 
 GPU_BUSY_TEXTS = (

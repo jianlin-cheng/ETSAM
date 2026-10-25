@@ -17,7 +17,8 @@ has none, from ``conda env list --json``. Environments made by the installer
 
 If none is found, ``install()`` downloads the installer for this platform and
 runs it silently. The installer supports NVIDIA GPUs on Linux and Windows
-(x86-64); it stops with a clear message on other computers.
+(x86-64), and Macs with Apple silicon; it stops with a clear message on other
+computers.
 
 A plugin release needs at least the ETSAM release of the same version
 (``needs_update``). ``update()`` reinstalls an installer-made environment with the
@@ -50,11 +51,12 @@ INSTALL_MESSAGE = (
     "ETSAM is not installed. Click Install ETSAM to download and set it up. "
     "This downloads about 5 GB and may take 10–15 minutes. "
     "Keep the application open until installation finishes. "
-    "ETSAM requires Linux or Windows and an NVIDIA GPU. macOS is not supported."
+    "ETSAM requires Linux or Windows with an NVIDIA GPU, or a Mac with Apple silicon "
+    "(macOS 14 or newer)."
 )
 NOT_FOUND = (
-    "ETSAM is not installed. ETSAM requires Linux or Windows and an NVIDIA GPU. "
-    "macOS is not supported."
+    "ETSAM is not installed. ETSAM requires Linux or Windows with an NVIDIA GPU, or a "
+    "Mac with Apple silicon (macOS 14 or newer)."
 )
 UPDATE_MESSAGE = (
     "ETSAM {installed} is older than this plugin ({plugin}), which cannot be used "
@@ -227,13 +229,26 @@ def installer_platform() -> str | None:
     computer, or None if there is none.
     """
     machine = platform.machine().lower()
+    if sys.platform == "darwin":
+        # platform.machine() is x86_64 in a host application run with Rosetta on
+        # Apple silicon: ask the hardware. Intel Macs are not supported.
+        return "macOS-arm64.sh" if machine == "arm64" or _apple_silicon() else None
     if machine not in ("x86_64", "amd64"):
         return None
     if sys.platform.startswith("linux"):
         return "Linux-x86_64.sh"
     if sys.platform == "win32":
         return "Windows-x86_64.exe"
-    return None  # macOS and other platforms: not supported by the installer yet
+    return None  # other platforms: not supported by the installer yet
+
+
+def _apple_silicon() -> bool:
+    try:
+        out = subprocess.run(["sysctl", "-n", "hw.optional.arm64"], capture_output=True,
+                             text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out.stdout.strip() == "1"
 
 
 def can_install() -> bool:

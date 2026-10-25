@@ -15,9 +15,9 @@ The **napari-etsam** plugin runs ETSAM inside [napari](https://napari.org), a fr
 
 | | Minimum | Recommended |
 | --- | --- | --- |
-| GPU | NVIDIA GPU with 2 GB VRAM | NVIDIA GPU with 4 GB+ VRAM |
+| GPU | NVIDIA GPU with 2 GB VRAM, or Apple silicon (M1 or newer) | NVIDIA GPU with 4 GB+ VRAM, or Apple silicon (M1 or newer) |
 | RAM | 4 GB | 8 GB |
-| Operating system | **Linux or Windows, with an NVIDIA GPU** | |
+| Operating system | **Linux or Windows with an NVIDIA GPU, or macOS 14+ on Apple silicon** | |
 
 ## Installation
 
@@ -48,7 +48,7 @@ ETSAM itself runs in its own environment, separate from napari. When you open th
 
 Installation downloads about **5 GB** and may take **10–15 minutes**. Keep napari open until it finishes; the panel shows progress. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`). Subsequent use starts immediately.
 
-ETSAM requires **Linux or Windows and an NVIDIA GPU**. macOS is not supported. Contributions are welcome to extend hardware/software support.
+ETSAM requires **Linux or Windows with an NVIDIA GPU**, or **a Mac with Apple silicon (M1 or newer) and macOS 14 or newer**, where it uses the Mac's GPU through Metal (MPS). Intel Macs are not supported. Contributions are welcome to extend hardware/software support.
 
 ## Segmenting a Tomogram
 
@@ -91,7 +91,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 | --- | --- |
 | *No tomogram selected* | Open an `.mrc` file first (drag and drop, *File ▸ Open* or **Open…**). |
 | *This layer cannot be segmented* | ETSAM needs a single 3D grayscale volume (Z, Y, X). Select the tomogram layer rather than a 2D image, RGB image or a time series. |
-| *Installing ETSAM failed: … requires an NVIDIA GPU* | The installer supports NVIDIA GPUs only. Install ETSAM yourself as described in [Installation](https://jianlin-cheng.github.io/ETSAM/installation/#method-2-conda-environment-from-source). |
+| *Installing ETSAM failed: … requires an NVIDIA GPU* (or *Apple silicon*, *macOS 14*) | The installer supports NVIDIA GPUs on Linux and Windows, and Apple silicon Macs with macOS 14 or newer. Install ETSAM yourself as described in [Installation](https://jianlin-cheng.github.io/ETSAM/installation/#method-2-conda-environment-from-source). |
 | *Installing ETSAM failed: … the folder already exists* | An earlier installation was interrupted. Delete the `etsam` folder in your home folder and reopen the panel. |
 | *ETSAM is not installed* | This computer is not supported by the installer. Install ETSAM yourself (see [Installation](#installation)), or set `ETSAM_PYTHON`. |
 | *ETSAM is not installed in the environment …* | That environment lacks ETSAM. Run step 3 of the conda installation (`pip install --no-deps -e .` in the ETSAM folder). |
