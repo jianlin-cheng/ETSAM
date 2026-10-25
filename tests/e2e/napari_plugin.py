@@ -1,6 +1,9 @@
 """Drive the napari plugin's panel end to end, as a user would (CI).
 
-    QT_QPA_PLATFORM=offscreen python tests/e2e/napari_plugin.py TOMOGRAM.mrc OUTPUT_DIR
+    python tests/e2e/napari_plugin.py TOMOGRAM.mrc OUTPUT_DIR
+
+(On Linux without a display, set QT_QPA_PLATFORM=offscreen; on macOS, napari
+needs the default platform, which has OpenGL.)
 
 Run with a Python that has napari, a Qt binding and napari-etsam, not with the
 ETSAM environment: the plugin finds that environment itself (as installed by

@@ -286,10 +286,11 @@ jobs:
 
       # The napari plugin, as users install it, driving its panel: it finds the
       # ETSAM environment installed above and segments the tomogram on the GPU.
+      # Qt's default (cocoa) platform: the runner has a window session, and
+      # napari's canvas crashes without OpenGL on the offscreen platform.
       - name: Test the napari plugin (macOS)
         if: runner.os == 'macOS'
         env:
-          QT_QPA_PLATFORM: offscreen
           ETSAM_EXPECT_DEVICE: GPU (Metal)
         run: |
           "${{ steps.napari-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/napari"
