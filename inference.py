@@ -1,3 +1,6 @@
+import os
+from contextlib import nullcontext
+
 import numpy as np
 import torch
 from PIL import Image
@@ -7,15 +10,42 @@ from sam2.utils.misc import PrefetchFrameLoader, TomogramFrameLoader
 CHECKPOINT_PATH = "checkpoints/etsam_stage1_v1.pt"
 CONFIG_PATH = "configs/sam2.1/sam2.1_hiera_b+.yaml"
 
+def select_device():
+    """
+    The PyTorch device ETSAM runs on: "cuda" (NVIDIA GPU), "mps" (Apple silicon
+    GPU) or "cpu". ETSAM_DEVICE overrides the choice (e.g. ETSAM_DEVICE=cpu).
+    """
+    override = os.environ.get("ETSAM_DEVICE")
+    if override:
+        return override
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def autocast(device):
+    """
+    Mixed precision for inference on device: bfloat16 on NVIDIA GPUs, as ETSAM
+    was trained and validated; float32 on Apple silicon GPUs and the CPU.
+    """
+    device = torch.device(device)
+    if device.type == "cuda":
+        return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+    return nullcontext()
+
+
 def load_video_frames_from_tomogram_data(
     tomogram_data,
     image_size,
     offload_video_to_cpu,
     img_mean=(0.485, 0.456, 0.406),
     img_std=(0.229, 0.224, 0.225),
-    compute_device=torch.device("cuda"),
+    compute_device=None,
 ):
     """Load the video frames from a mrc file."""
+    compute_device = torch.device(compute_device or select_device())
 
     img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
     img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
@@ -79,8 +109,13 @@ def _forget_expired_frames(predictor, inference_state, frame_idx):
 
 
 @torch.inference_mode()
-@torch.autocast(device_type="cuda", dtype=torch.bfloat16)
-def vos_inference(
+def vos_inference(predictor, *args, **kwargs):
+    """Track the volume with predictor, in the precision for its device (see autocast)."""
+    with autocast(getattr(predictor, "device", "cpu")):
+        return _vos_inference(predictor, *args, **kwargs)
+
+
+def _vos_inference(
     predictor,
     video_data,
     etsam1_seg_mask=None,
@@ -345,12 +380,12 @@ def etsam_inference(
     offload_video_to_cpu=True,
     offload_state_to_cpu=True,
     grid_interval=50,
-    device="cuda",
+    device=None,
     progress=None,
     output=None,
     mask_threshold=None,
 ):
-    """Run ETSAM inference on a single tomogram.
+    """Run ETSAM inference on a single tomogram, on device (default: select_device()).
 
     progress(slices_done, total_slices) is called after each slice.
     output optionally receives the (num_frames, H, W) logits, one slice at a time:
@@ -363,6 +398,7 @@ def etsam_inference(
 
     print("==> Loading ETSAM with checkpoint: ", ckpt_path)
 
+    device = device or select_device()
     predictor = build_sam2_video_predictor(
         config_file=config_path,
         ckpt_path=ckpt_path,

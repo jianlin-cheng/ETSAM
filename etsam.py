@@ -47,19 +47,7 @@ CHECKPOINT_MD5 = {
 DOWNLOAD_CONNECTIONS = int(os.environ.get("ETSAM_DOWNLOAD_CONNECTIONS", "64"))
 
 
-def select_device():
-    """
-    The PyTorch device ETSAM runs on: "cuda" (NVIDIA GPU), "mps" (Apple silicon
-    GPU) or "cpu". ETSAM_DEVICE overrides the choice (e.g. ETSAM_DEVICE=cpu).
-    """
-    override = os.environ.get("ETSAM_DEVICE")
-    if override:
-        return override
-    if torch.cuda.is_available():
-        return "cuda"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+select_device = inference.select_device
 
 
 def min_max_normalize(array):
@@ -169,7 +157,7 @@ def run_two_stage_inference_on_tomogram(
     stage2_prompt,
     grid_interval,
     stage1_logit_threshold,
-    device="cuda",
+    device=None,
     progress=None,
     output=None,
     mask_threshold=None,
@@ -180,7 +168,8 @@ def run_two_stage_inference_on_tomogram(
     Runs stage 1 on the normalized volume, fuses its logits with the volume, then runs stage 2.
 
     Writes the stage-2 logits into output, a float32 array matching the input
-    spatial shape (allocated if None), and returns it. With mask_threshold, it
+    spatial shape (allocated if None), and returns it. device defaults to
+    select_device(). With mask_threshold, it
     writes the uint8 mask (logits > mask_threshold) instead.
     progress(stage, slices_done, total_slices) is called after each slice.
     """
