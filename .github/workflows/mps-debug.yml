@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/mps-debug.yml
       - tests/e2e/compare_devices.py
+      - tests/e2e/check_segmentation.py
       - sam2/**
       - inference.py
       - etsam.py
@@ -17,6 +18,7 @@ permissions:
 
 jobs:
   compare:
+    if: false  # done: MaxPool2d on MPS (see hieradet.do_pool)
     runs-on: macos-15
     timeout-minutes: 60
     defaults:
@@ -48,3 +50,39 @@ jobs:
           python tests/fetch_test_tomogram.py "$RUNNER_TEMP/tomogram.mrc"
           python tests/e2e/compare_devices.py "$RUNNER_TEMP/tomogram.mrc" --device mps --slices 3 --show 60 2>&1 \
             | grep -v "propagate in video"
+
+  windows-conda:
+    name: Windows setup-miniconda (${{ matrix.name }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: v3, latest Miniforge
+            action: v3
+            miniforge: latest
+          - name: v4.1.0, latest Miniforge
+            action: v4.1.0
+            miniforge: latest
+          - name: v3, Miniforge 26.7.2-0
+            action: v3
+            miniforge: 26.7.2-0
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.action == 'v3'
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: ${{ matrix.miniforge }}
+          activate-environment: etsam-build
+          channels: conda-forge
+      - if: matrix.action == 'v4.1.0'
+        uses: conda-incubator/setup-miniconda@v4.1.0
+        with:
+          miniforge-version: ${{ matrix.miniforge }}
+          activate-environment: etsam-build
+          channels: conda-forge
+      - run: conda --version && conda install --yes -c conda-forge rattler-build constructor && constructor --version

@@ -10,6 +10,9 @@ logits thresholded (unless --postprocessed), and that the last quarter of the sl
 tracking for about 20 slices, so the first slices of a small test tomogram stay
 empty. --reference compares the logits with another run's (for example MPS
 with the CPU): they must be strongly correlated and their masks must overlap.
+The correlation is of the logits clipped to [-20, 20]: on slices where the
+model sees no object, all logits are -1024, and a run that starts finding
+membranes a slice earlier would otherwise dominate it.
 """
 
 import argparse
@@ -82,14 +85,19 @@ def main():
                   f"mask == logits > {args.threshold}")
         if args.reference:
             reference, _ = load(args.reference)
-            correlation = float(np.corrcoef(logits.ravel(), reference.ravel())[0, 1])
+            clipped = [np.clip(a, -20, 20).ravel() for a in (logits, reference)]
+            correlation = float(np.corrcoef(*clipped)[0, 1])
             check(correlation >= args.min_correlation,
-                  f"correlation with the reference logits: {correlation:.6f} >= {args.min_correlation}")
+                  f"correlation with the reference logits (clipped to ±20): {correlation:.6f} "
+                  f">= {args.min_correlation}")
             overlap = dice(logits > args.threshold, reference > args.threshold)
             check(overlap >= args.min_dice,
                   f"Dice overlap with the reference mask: {overlap:.4f} >= {args.min_dice}")
-            difference = np.abs(logits - reference)
-            print(f"      logit difference: max {difference.max():.4f}, mean {difference.mean():.6f}")
+            print("      Dice per slice:", [round(float(dice(a > args.threshold, b > args.threshold)), 3)
+                                         for a, b in zip(logits, reference)])
+            no_object = [i for i, (a, b) in enumerate(zip(logits, reference))
+                         if (a.max() <= -1000) != (b.max() <= -1000)]
+            print(f"      slices where only one run sees no object: {no_object}")
 
     if failures:
         sys.exit(f"{len(failures)} check(s) failed")
