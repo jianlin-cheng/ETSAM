@@ -1,9 +1,14 @@
 name: Build Installers
 
-# Builds and tests the ETSAM installers (Linux .sh and Windows .exe) with conda
-# constructor; see installer/README.md. Runs on demand, and as part of a release
-# (release.yml), which attaches the installers to the GitHub release; that is
-# where the ChimeraX and napari plugins download the installer from.
+# Builds and tests the ETSAM installers (Linux .sh, Windows .exe and macOS .sh
+# for Apple silicon) with conda constructor; see installer/README.md. Runs on
+# demand, and as part of a release (release.yml), which attaches the installers
+# to the GitHub release; that is where the ChimeraX and napari plugins download
+# the installer from.
+#
+# On macOS, the runner has an Apple silicon GPU, so ETSAM is tested end to end
+# there: the command line, the plugins' worker and the napari plugin segment the
+# center slices of a real tomogram on the GPU (MPS), compared with the CPU.
 on:
   workflow_dispatch:
   workflow_call:
@@ -24,7 +29,11 @@ jobs:
           - os: windows-latest
             platform: Windows-x86_64
             extension: exe
+          - os: macos-15  # Apple silicon (arm64)
+            platform: macOS-arm64
+            extension: sh
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash -el {0}
@@ -132,6 +141,188 @@ jobs:
           if not exist "%RUNNER_TEMP%\etsam_env\checkpoints\canary" exit /b 1
           if not exist "%RUNNER_TEMP%\etsam_env\.etsam-installer" exit /b 1
           call "%RUNNER_TEMP%\etsam_env\commands\etsam.cmd" --help || exit /b 1
+
+      # The model weights (1.9 GB), cached between runs instead of downloaded from
+      # Zenodo each time. The key names their checksums (CHECKPOINT_MD5 in
+      # etsam.py): change it with them.
+      - name: Restore the model weights (macOS)
+        id: weights
+        if: runner.os == 'macOS'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/etsam
+          key: etsam-weights-db2dc46d775a17619e0a657aabaf0636-170488377f1424be1c431bc7983c21b4
+
+      # Installed as users do, without skipping the hardware check (the runner is
+      # an Apple silicon Mac) and with the default (MPS) PyTorch. The weights come
+      # from the cache, or are downloaded on first use (ensure_checkpoints).
+      - name: Test the installer (macOS)
+        if: runner.os == 'macOS'
+        env:
+          ETSAM_SKIP_WEIGHTS: "1"
+        run: |
+          PREFIX="$RUNNER_TEMP/etsam_env"
+          echo "ETSAM_ENV=$PREFIX" >> "$GITHUB_ENV"
+          cat docs/public/install.sh | ETSAM_INSTALLER="$INSTALLER_PATH" ETSAM_PREFIX="$PREFIX" sh
+          test -f "$PREFIX/.etsam-installer"
+          grep -q " mps$" "$PREFIX/.etsam-installer"
+          "$PREFIX/bin/python" -c "import etsam, postprocess, torch; print('ETSAM OK, PyTorch', torch.__version__)"
+          # PyTorch must be able to use the GPU, or the tests below would test the CPU
+          "$PREFIX/bin/python" - <<'EOF'
+          import platform, torch, etsam
+          print("macOS", platform.mac_ver()[0], platform.machine())
+          print("MPS built:", torch.backends.mps.is_built(), "available:", torch.backends.mps.is_available())
+          assert torch.backends.mps.is_built(), "this PyTorch has no MPS support"
+          assert torch.backends.mps.is_available(), "MPS is not available on this runner"
+          assert etsam.select_device() == "mps", etsam.select_device()
+          x = torch.ones(4, device="mps")
+          print("MPS tensor:", (x * 2).cpu().tolist())
+          EOF
+          "$PREFIX/bin/etsam" --help
+          "$PREFIX/bin/etsam-postprocess" --help
+          # the etsam commands, as found in a new terminal: zsh (the macOS default
+          # shell) reads ~/.zshrc, which the installer creates on macOS
+          test "$(ls "$PREFIX/commands")" = "$(printf 'etsam\netsam-postprocess')"
+          grep -q "$PREFIX/commands" "$HOME/.zshrc" "$HOME/.profile"
+          line="$(grep "added by the ETSAM installer" "$HOME/.zshrc")"
+          env -i HOME="$HOME" PATH=/usr/bin:/bin zsh -c "$line; etsam --help && etsam-postprocess --help"
+          mkdir -p "$RUNNER_TEMP/fake" && echo 'raise SystemExit("wrong etsam module")' > "$RUNNER_TEMP/fake/etsam.py"
+          PYTHONPATH="$RUNNER_TEMP/fake" "$PREFIX/commands/etsam" --help
+          # install again: the existing installation is found and reinstalled, and a
+          # model weights file in it is kept
+          mkdir -p "$PREFIX/checkpoints"
+          echo keep > "$PREFIX/checkpoints/canary"
+          cat docs/public/install.sh | ETSAM_YES=1 ETSAM_INSTALLER="$INSTALLER_PATH" ETSAM_PREFIX="$PREFIX" sh
+          test "$(cat "$PREFIX/checkpoints/canary")" = keep
+          rm "$PREFIX/checkpoints/canary"
+          test -f "$PREFIX/.etsam-installer"
+          "$PREFIX/commands/etsam" --help
+
+      # Downloaded by ETSAM itself (as on first use), and cached right away, so
+      # that a later failing step does not lose them.
+      - name: Download the model weights (macOS)
+        if: runner.os == 'macOS'
+        run: '"$ETSAM_ENV/bin/python" -I -c "import etsam; print(etsam.ensure_checkpoints())"'
+
+      - name: Cache the model weights (macOS)
+        if: runner.os == 'macOS' && steps.weights.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/etsam
+          key: ${{ steps.weights.outputs.cache-primary-key }}
+
+      - name: Unit tests (macOS)
+        if: runner.os == 'macOS'
+        run: '"$ETSAM_ENV/bin/python" -m unittest discover -s tests -v'
+
+      # The 32 center slices of a real tomogram (EMPIAR-13056, 84 MB; only these
+      # bytes are downloaded). ETSAM needs about 20 slices of tracking before it
+      # finds membranes, so fewer slices would give an empty mask.
+      - name: Download a small test tomogram (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/e2e"
+          "$ETSAM_ENV/bin/python" -I tests/fetch_test_tomogram.py "$RUNNER_TEMP/e2e/tomogram.mrc"
+
+      # The etsam command on the Apple GPU (with the logits and post-processing),
+      # and on the CPU as the reference: MPS runs in float32, like the CPU.
+      - name: Test the etsam command on the GPU and the CPU (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd "$RUNNER_TEMP/e2e"
+          CHECK="$GITHUB_WORKSPACE/tests/e2e/check_segmentation.py"
+          start=$(date +%s)
+          "$ETSAM_ENV/commands/etsam" tomogram.mrc --output-dir mps --store-logits --post-process | tee mps.log
+          echo "MPS: $(( $(date +%s) - start )) s"
+          grep -q "Running on the Apple silicon GPU (MPS)" mps.log
+          start=$(date +%s)
+          ETSAM_DEVICE=cpu "$ETSAM_ENV/commands/etsam" tomogram.mrc --output-dir cpu --store-logits | tee cpu.log
+          echo "CPU: $(( $(date +%s) - start )) s"
+          grep -q "running on the CPU" cpu.log
+          "$ETSAM_ENV/bin/python" -I "$CHECK" tomogram.mrc \
+            --mask cpu/tomogram_etsam_predicted_mask.mrc --logits cpu/tomogram_etsam_predicted_logits.mrc
+          "$ETSAM_ENV/bin/python" -I "$CHECK" tomogram.mrc \
+            --mask mps/tomogram_etsam_predicted_mask.mrc --logits mps/tomogram_etsam_predicted_logits.mrc \
+            --reference cpu/tomogram_etsam_predicted_logits.mrc
+          "$ETSAM_ENV/bin/python" -I "$CHECK" tomogram.mrc --postprocessed --min-membrane 0.005 \
+            --mask mps/tomogram_etsam_predicted_post_processed_mask.mrc \
+            --logits mps/tomogram_etsam_predicted_logits.mrc
+          "$ETSAM_ENV/commands/etsam-postprocess" mps/tomogram_etsam_predicted_mask.mrc postprocessed.mrc --post-process
+          test -s postprocessed.mrc
+
+      # The worker that both plugins run in the ETSAM environment (the ChimeraX
+      # copy; the napari plugin's copy must be identical, and is run below).
+      - name: Test the plugins' worker (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          for module in etsam_env.py etsam_run.py etsam_worker.py; do
+            cmp "external_plugins/chimerax-etsam/src/$module" "external_plugins/napari-etsam/src/napari_etsam/$module"
+          done
+          cd "$RUNNER_TEMP/e2e"
+          "$ETSAM_ENV/bin/python" -I -c "import mrcfile, numpy; numpy.save('worker_input.npy', mrcfile.read('tomogram.mrc'))"
+          "$ETSAM_ENV/bin/python" "$GITHUB_WORKSPACE/external_plugins/chimerax-etsam/src/etsam_worker.py" \
+            segment-array --input worker_input.npy --output worker_logits.npy > worker.jsonl
+          cat worker.jsonl | grep -v '"progress"'
+          grep -q '"event": "start", "device": "mps"' worker.jsonl
+          grep -q '"accelerated": true' worker.jsonl
+          grep -q '"event": "done"' worker.jsonl
+          "$ETSAM_ENV/bin/python" -I "$GITHUB_WORKSPACE/tests/e2e/check_segmentation.py" tomogram.mrc \
+            --logits worker_logits.npy --reference mps/tomogram_etsam_predicted_logits.mrc
+
+      - name: Setup Python for napari (macOS)
+        id: napari-python
+        if: runner.os == 'macOS'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The napari plugin, as users install it, driving its panel: it finds the
+      # ETSAM environment installed above and segments the tomogram on the GPU.
+      - name: Test the napari plugin (macOS)
+        if: runner.os == 'macOS'
+        env:
+          QT_QPA_PLATFORM: offscreen
+          ETSAM_EXPECT_DEVICE: GPU (Metal)
+        run: |
+          "${{ steps.napari-python.outputs.python-path }}" -m venv "$RUNNER_TEMP/napari"
+          "$RUNNER_TEMP/napari/bin/python" -m pip install --quiet "napari[pyqt6]" ./external_plugins/napari-etsam
+          cd "$RUNNER_TEMP/e2e"
+          "$RUNNER_TEMP/napari/bin/python" "$GITHUB_WORKSPACE/tests/e2e/napari_plugin.py" tomogram.mrc napari
+          "$ETSAM_ENV/bin/python" -I "$GITHUB_WORKSPACE/tests/e2e/check_segmentation.py" tomogram.mrc \
+            --logits napari/napari_logits.mrc --reference mps/tomogram_etsam_predicted_logits.mrc
+          "$ETSAM_ENV/bin/python" -I "$GITHUB_WORKSPACE/tests/e2e/check_segmentation.py" tomogram.mrc \
+            --mask napari/napari_mask.mrc --logits napari/napari_logits.mrc --threshold 0.5 \
+            --postprocessed --min-membrane 0.002
+
+      # "Install ETSAM" in the plugins: the macOS installer is picked for this Mac
+      # and run silently into a new folder.
+      - name: Test installing ETSAM from the plugins (macOS)
+        if: runner.os == 'macOS'
+        env:
+          ETSAM_INSTALLER: ${{ env.INSTALLER_PATH }}  # the installer built above
+          ETSAM_SKIP_WEIGHTS: "1"
+          ETSAM_NO_PATH: "1"
+        run: |
+          "$RUNNER_TEMP/napari/bin/python" - <<'EOF'
+          import os, subprocess
+          from napari_etsam import etsam_env
+          assert etsam_env.installer_platform() == "macOS-arm64.sh", etsam_env.installer_platform()
+          assert etsam_env.can_install()
+          python = etsam_env.install(log=print, prefix=os.path.join(os.environ["RUNNER_TEMP"], "plugin_env"))
+          print("installed:", python, etsam_env.etsam_version(python))
+          subprocess.run([python, "-c", "import torch, etsam; assert torch.backends.mps.is_available()"], check=True)
+          EOF
+
+      - name: Upload the test results (macOS)
+        if: runner.os == 'macOS' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-e2e-results
+          path: |
+            ${{ runner.temp }}/e2e/*.log
+            ${{ runner.temp }}/e2e/*.jsonl
+            ${{ runner.temp }}/e2e/mps/*mask.mrc
+          if-no-files-found: ignore
 
       - name: Upload the installer
         uses: actions/upload-artifact@v4

@@ -10,6 +10,23 @@ They check that the slice-by-slice pipeline (normalization, stage fusion,
 prompts, split processing, file-backed volumes and outputs) produces exactly the
 bytes of the original whole-volume computations.
 
+End-to-end tests on a real tomogram run in CI on an Apple silicon Mac (see
+`.github/workflows/installer.yml`); they can also be run by hand on any computer.
+`fetch_test_tomogram.py` downloads the 32 center slices of a public tomogram
+(only those bytes), `e2e/check_segmentation.py` checks a result (and compares it
+with a reference run, such as the CPU), and `e2e/napari_plugin.py` drives the
+napari plugin's panel:
+
+```bash
+python tests/fetch_test_tomogram.py small.mrc
+etsam small.mrc --output-dir gpu --store-logits
+ETSAM_DEVICE=cpu etsam small.mrc --output-dir cpu --store-logits
+python tests/e2e/check_segmentation.py small.mrc --logits gpu/small_etsam_predicted_logits.mrc \
+    --reference cpu/small_etsam_predicted_logits.mrc
+```
+
+`ETSAM_DEVICE` (`cuda`, `mps` or `cpu`) overrides the device ETSAM picks.
+
 To measure time and memory on a real tomogram (needs a GPU and the installed
 checkpoints), and to check that another revision gives an identical result:
 
