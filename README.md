@@ -23,7 +23,7 @@ Faster segmentation with much less CPU memory, and <ins>byte-identical results</
 # Requirements
 ## Hardware Requirements
 <ins>ETSAM requires:</ins>
-- a NVIDIA GPU with atleast 2GB VRAM, 4GB VRAM recommended. 
+- a NVIDIA GPU with atleast 2GB VRAM, 4GB VRAM recommended, or a Mac with Apple silicon (M1 or newer). 
 - atleast 4GB CPU RAM, recommended 8GB.
 
 <ins>Tested on</ins>
@@ -32,14 +32,14 @@ Faster segmentation with much less CPU memory, and <ins>byte-identical results</
 - 32 GB DDR5 CPU RAM
 
 ## Supported Platforms
-ETSAM supports **Linux and Windows with an NVIDIA GPU** (tested on Fedora 43, Arch Linux and Windows 11).
+ETSAM supports **Linux and Windows with an NVIDIA GPU** (tested on Fedora 43, Arch Linux and Windows 11), and **macOS 14 or newer on Apple silicon** (M1 or newer), where it runs on the Mac's GPU through Metal (MPS). macOS support is tested in CI only (GitHub's Apple silicon runners), on a small tomogram; results on Macs may differ slightly from NVIDIA GPUs.
 
-_Other configurations (macOS, AMD or Intel GPUs) may work, but require testing by users; contributions are welcome. For example, AMD GPUs may work with an [AMD specific PyTorch](https://pytorch.org/get-started/locally/) installed in the etsam environment by the conda constructor installer post-script: [installer/post_install.sh](installer/post_install.sh)._
+_Other configurations (Intel Macs, AMD or Intel GPUs) may work, but require testing by users; contributions are welcome. For example, AMD GPUs may work with an [AMD specific PyTorch](https://pytorch.org/get-started/locally/) installed in the etsam environment by the conda constructor installer post-script: [installer/post_install.sh](installer/post_install.sh)._
 
 # Installation 
 Install ETSAM with one command. 
 
-On Linux:
+On Linux or macOS (Apple silicon):
 ```bash
 curl -fsSL https://jianlin-cheng.github.io/ETSAM/install.sh | sh
 ```
@@ -47,7 +47,7 @@ On Windows, in PowerShell:
 ```powershell
 irm https://jianlin-cheng.github.io/ETSAM/install.ps1 | iex
 ```
-It installs ETSAM in a separate python environment with dependencies and model checkpoints required to run it. Everything goes into one folder (Linux: `~/etsam_env`, Windows: `%USERPROFILE%\etsam_env`). It also makes the `etsam` command available in new terminals thereafter. Detailed instructions and various other installation methodologies are available in https://jianlin-cheng.github.io/ETSAM/installation.
+It installs ETSAM in a separate python environment with dependencies and model checkpoints required to run it. Everything goes into one folder (Linux and macOS: `~/etsam_env`, Windows: `%USERPROFILE%\etsam_env`). It also makes the `etsam` command available in new terminals thereafter. Detailed instructions and various other installation methodologies are available in https://jianlin-cheng.github.io/ETSAM/installation.
 
 # Usage
 ### CLI

@@ -24,9 +24,9 @@ On first start, if ETSAM is missing, click **Install ETSAM** to set it up in its
 
 | | Minimum | Recommended |
 | --- | --- | --- |
-| GPU | NVIDIA GPU with 2 GB VRAM | NVIDIA GPU with 4 GB+ VRAM |
+| GPU | NVIDIA GPU with 2 GB VRAM, or Apple silicon (M1 or newer) | NVIDIA GPU with 4 GB+ VRAM, or Apple silicon (M1 or newer) |
 | RAM | 4 GB | 8 GB |
-| Operating system | **Linux or Windows, with an NVIDIA GPU** | |
+| Operating system | **Linux or Windows with an NVIDIA GPU, or macOS 14+ on Apple silicon** | |
 
 
 ## Installation
@@ -51,7 +51,7 @@ ETSAM itself runs in its own environment, separate from ChimeraX. When you open 
 
 Installation downloads about **5 GB** and may take **10–15 minutes**. Keep ChimeraX open until it finishes; the panel shows progress. The installer puts ETSAM into `~/etsam_env` (on Windows, `%USERPROFILE%\etsam_env`).
 :::note
-ETSAM requires **Linux or Windows and an NVIDIA GPU**. macOS is not supported. Contributions are welcome to extend hardware/software support.
+ETSAM requires **Linux or Windows with an NVIDIA GPU**, or **a Mac with Apple silicon (M1 or newer) and macOS 14 or newer**, where it uses the Mac's GPU through Metal (MPS). Intel Macs are not supported. Contributions are welcome to extend hardware/software support.
 :::
 
 ## Segmenting a Tomogram
@@ -131,7 +131,7 @@ When something goes wrong, the panel shows a red box with the problem and a sugg
 | *stopped by the operating system* / *ran out of memory* | Close other programs, or bin the tomogram. |
 | *Could not save …* | The folder is read-only, or the disk is full. Choose another folder. |
 | *The GPU is busy* | Another program keeps ETSAM from using the GPU. Restart ChimeraX; if the message persists, close other programs that use the GPU (see the note below). |
-| *Installing ETSAM failed: … requires an NVIDIA GPU* | The installer supports NVIDIA GPUs only. Install ETSAM yourself as described in [Installation](/ETSAM/installation/#method-2-conda-environment-from-source). |
+| *Installing ETSAM failed: … requires an NVIDIA GPU* (or *Apple silicon*, *macOS 14*) | The installer supports NVIDIA GPUs on Linux and Windows, and Apple silicon Macs with macOS 14 or newer. Install ETSAM yourself as described in [Installation](/ETSAM/installation/#method-2-conda-environment-from-source). |
 | *Installing ETSAM failed: … the folder already exists* | An earlier installation was interrupted. Delete the `etsam_env` folder in your home folder and reopen the panel. |
 | *ETSAM is not installed* | This computer is not supported by the installer. Install ETSAM yourself (see above), or set `ETSAM_PYTHON`. |
 | *ETSAM is not installed in the environment …* | That environment lacks ETSAM. Run step 3 of the conda installation (`pip install --no-deps -e .` in the ETSAM folder). |
