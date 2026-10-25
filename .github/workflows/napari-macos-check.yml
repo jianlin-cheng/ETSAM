@@ -1,0 +1,36 @@
+# TEMPORARY (macos-apple-silicon branch): does napari start on the macOS runner
+# with Qt's default (cocoa) platform? Remove before merging.
+name: napari macOS check
+on:
+  push:
+    branches: [macos-apple-silicon]
+    paths: [.github/workflows/napari-macos-check.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet "napari[pyqt6]" ./external_plugins/napari-etsam
+      - name: Start napari with the ETSAM panel (cocoa)
+        run: |
+          python - <<'PY'
+          import time, napari, numpy as np
+          from qtpy.QtWidgets import QApplication
+          from napari_etsam._widget import ETSAMWidget
+          viewer = napari.Viewer(show=False)
+          viewer.add_image(np.zeros((4, 32, 32), np.float32))
+          widget = ETSAMWidget(viewer)
+          viewer.window.add_dock_widget(widget)
+          end = time.monotonic() + 60
+          while widget.worker is not None and time.monotonic() < end:
+              QApplication.processEvents(); time.sleep(0.05)
+          print("setup:", widget.setup_label.text())
+          viewer.close()
+          print("napari started and closed")
+          PY
