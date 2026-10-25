@@ -39,7 +39,7 @@ def tensors(value):
 def summary(value):
     out = []
     for t in tensors(value):
-        t = t.detach().to("cpu", torch.float64)
+        t = t.detach().to("cpu").double()
         if t.is_complex():
             t = torch.view_as_real(t)
         out.append((tuple(t.shape), t.mean().item(), t.std().item() if t.numel() > 1 else 0.0,
@@ -59,7 +59,7 @@ def check_ops(device):
         return torch.view_as_real(xc * freqs).flatten(3)
 
     def report(name, cpu, dev):
-        dev = dev.to("cpu", torch.float32)
+        dev = dev.to("cpu").float()
         cpu = cpu.to(torch.float32)
         print(f"{name}: max abs difference {(cpu - dev).abs().max().item():.3g}")
 
