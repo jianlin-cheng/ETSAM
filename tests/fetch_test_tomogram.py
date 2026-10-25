@@ -7,8 +7,8 @@ requests): an MRC file stores its slices one after another after the header, so
 the center slices are one contiguous byte range. The default tomogram is from
 EMPIAR-13056 (mouse embryonic fibroblast lamella, 9.98 Å/px, 682 × 960 × 334);
 its 32 center slices are 84 MB. ETSAM finds membranes only after tracking for
-about 20 slices, so fewer slices give an (almost) empty mask. Needs only numpy
-and mrcfile.
+about 10 slices, so fewer slices give an empty mask. Needs only numpy and
+mrcfile.
 """
 
 import argparse

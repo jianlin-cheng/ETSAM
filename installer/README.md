@@ -45,7 +45,7 @@ version comes from `pyproject.toml`.
 
 The GitHub Actions workflow `.github/workflows/installer.yml` builds and tests the three installers. On
 macOS (an Apple silicon runner) it also tests ETSAM end to end on the GPU: the `etsam` command (compared with
-a CPU run), the plugins' worker, the napari plugin's panel and the plugins' "Install ETSAM", on the 32 center
+a CPU run), the plugins' worker, the napari plugin's panel and the plugins' "Install ETSAM", on the 16 center
 slices of a real tomogram (`tests/fetch_test_tomogram.py`, `tests/e2e/`). It runs on
 demand, and as part of a release (`.github/workflows/release.yml`, run by a version tag `v*`), which
 attaches them to the GitHub release; see `RELEASING.md`. The plugins download the

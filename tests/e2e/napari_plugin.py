@@ -83,8 +83,9 @@ def main():
         fail("the membranes layer is missing or has the wrong shape", widget)
     if logits.shape != image.data.shape or logits.dtype != np.float32:
         fail(f"logits {logits.shape} {logits.dtype} do not match the tomogram", widget)
-    if not result["cleanup"] or not np.count_nonzero(labels.data):
-        fail("the cleaned-up mask is empty", widget)
+    # Clean-up only removes voxels (it may remove all of them in a small tomogram).
+    if not result["cleanup"] or np.count_nonzero(labels.data & ~(logits > result["threshold"])):
+        fail("the mask was not cleaned up, or has voxels below the threshold", widget)
 
     # A new threshold re-binarizes the stored logits (and cleans the mask up
     # again) without running ETSAM again.

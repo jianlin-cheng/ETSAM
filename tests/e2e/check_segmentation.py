@@ -8,7 +8,7 @@ plugins' worker); without --mask, the mask is the logits thresholded. Checks
 that they match the tomogram's shape (and voxel size), that the mask is the
 logits thresholded (unless --postprocessed), and that the last quarter of the
 slices contains membrane: ETSAM finds membranes only after tracking for about
-20 slices, so the first slices of a small test tomogram stay empty.
+10 slices, so the first slices of a small test tomogram stay empty.
 
 --reference compares the logits with another run's (for example MPS with the
 CPU). On a slice where the model sees no object, all its logits are -1024; where
