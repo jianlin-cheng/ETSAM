@@ -6,13 +6,16 @@
 MASK and LOGITS are .mrc files (from the etsam command) or .npy files (from the
 plugins' worker); without --mask, the mask is the logits thresholded. Checks
 that they match the tomogram's shape (and voxel size), that the mask is the
-logits thresholded (unless --postprocessed), and that the last quarter of the slices contains membrane: ETSAM finds membranes only after
-tracking for about 20 slices, so the first slices of a small test tomogram stay
-empty. --reference compares the logits with another run's (for example MPS
-with the CPU): they must be strongly correlated and their masks must overlap.
-The correlation is of the logits clipped to [-20, 20]: on slices where the
-model sees no object, all logits are -1024, and a run that starts finding
-membranes a slice earlier would otherwise dominate it.
+logits thresholded (unless --postprocessed), and that the last quarter of the
+slices contains membrane: ETSAM finds membranes only after tracking for about
+20 slices, so the first slices of a small test tomogram stay empty.
+
+--reference compares the logits with another run's (for example MPS with the
+CPU). On a slice where the model sees no object, all its logits are -1024; where
+that decision is borderline, tiny numerical differences flip it. So the logits
+are compared (correlation, largest difference) on the slices where both runs
+see an object, the flipped slices are counted separately, and the masks must
+overlap (Dice).
 """
 
 import argparse
@@ -46,6 +49,9 @@ def main():
     parser.add_argument("--min-membrane", type=float, default=0.01)
     parser.add_argument("--min-correlation", type=float, default=0.99)
     parser.add_argument("--min-dice", type=float, default=0.9)
+    parser.add_argument("--max-difference", type=float, help="largest allowed logit difference")
+    parser.add_argument("--max-flipped", type=int, default=1,
+                        help="slices where only one run sees no object")
     args = parser.parse_args()
 
     failures = []
@@ -85,19 +91,28 @@ def main():
                   f"mask == logits > {args.threshold}")
         if args.reference:
             reference, _ = load(args.reference)
-            clipped = [np.clip(a, -20, 20).ravel() for a in (logits, reference)]
-            correlation = float(np.corrcoef(*clipped)[0, 1])
-            check(correlation >= args.min_correlation,
-                  f"correlation with the reference logits (clipped to ±20): {correlation:.6f} "
-                  f">= {args.min_correlation}")
+            objects = [(a.max() > -1000, b.max() > -1000) for a, b in zip(logits, reference)]
+            both = [i for i, (a, b) in enumerate(objects) if a and b]
+            flipped = [i for i, (a, b) in enumerate(objects) if a != b]
+            check(len(flipped) <= args.max_flipped,
+                  f"slices where only one run sees no object: {flipped} (at most {args.max_flipped})")
+            if both:
+                x, y = logits[both].ravel(), reference[both].ravel()
+                correlation = float(np.corrcoef(x, y)[0, 1])
+                check(correlation >= args.min_correlation,
+                      f"logit correlation on the {len(both)} slices where both see an object: "
+                      f"{correlation:.6f} >= {args.min_correlation}")
+                difference = np.abs(x - y)
+                text = f"largest logit difference there: {difference.max():.4f} (mean {difference.mean():.6f})"
+                if args.max_difference is None:
+                    print("      " + text)
+                else:
+                    check(difference.max() <= args.max_difference, f"{text} <= {args.max_difference}")
             overlap = dice(logits > args.threshold, reference > args.threshold)
             check(overlap >= args.min_dice,
                   f"Dice overlap with the reference mask: {overlap:.4f} >= {args.min_dice}")
             print("      Dice per slice:", [round(float(dice(a > args.threshold, b > args.threshold)), 3)
                                          for a, b in zip(logits, reference)])
-            no_object = [i for i, (a, b) in enumerate(zip(logits, reference))
-                         if (a.max() <= -1000) != (b.max() <= -1000)]
-            print(f"      slices where only one run sees no object: {no_object}")
 
     if failures:
         sys.exit(f"{len(failures)} check(s) failed")
