@@ -1,10 +1,11 @@
 #!/bin/sh
-# Install ETSAM on Linux with one command:
+# Install ETSAM on Linux or macOS (Apple silicon) with one command:
 #
 #   curl -fsSL https://jianlin-cheng.github.io/ETSAM/install.sh | sh
 #
-# Downloads the ETSAM installer (ETSAM-<version>-Linux-x86_64.sh) from the latest GitHub
-# release and runs it without questions: ETSAM goes into ~/etsam_env, with PyTorch
+# Downloads the ETSAM installer (ETSAM-<version>-Linux-x86_64.sh, or
+# ETSAM-<version>-macOS-arm64.sh on a Mac) from the latest GitHub release and runs
+# it without questions: ETSAM goes into ~/etsam_env, with PyTorch
 # and the model weights, and the etsam commands are added to the PATH. The
 # installer is self-extracting, so it is saved to a temporary file and run from
 # there (it cannot be piped into sh itself).
@@ -30,9 +31,14 @@ PREFIX_SET="${ETSAM_PREFIX:-}"
 PREFIX="${ETSAM_PREFIX:-$HOME/etsam_env}"
 MARKER=".etsam-installer"   # written by the installer; first word: its version
 
-if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "x86_64" ]; then
-    echo "ETSAM: this installer is for Linux on x86-64 computers. For other systems, see" >&2
-    echo "       https://jianlin-cheng.github.io/ETSAM/installation/" >&2
+case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) PLATFORM="Linux-x86_64" ;;
+    # uname -m says x86_64 in a Rosetta shell on Apple silicon: ask the hardware.
+    Darwin-*) [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && PLATFORM="macOS-arm64" ;;
+esac
+if [ -z "${PLATFORM:-}" ]; then
+    echo "ETSAM: this installer is for Linux on x86-64 computers and Macs with Apple silicon." >&2
+    echo "       For other systems, see https://jianlin-cheng.github.io/ETSAM/installation/" >&2
     exit 1
 fi
 
@@ -63,7 +69,7 @@ else
         echo "       Download the installer by hand, see https://jianlin-cheng.github.io/ETSAM/installation/" >&2
         exit 1
     fi
-    SOURCE="$REPO/releases/download/$LATEST_TAG/ETSAM-${LATEST_TAG#v}-Linux-x86_64.sh"
+    SOURCE="$REPO/releases/download/$LATEST_TAG/ETSAM-${LATEST_TAG#v}-$PLATFORM.sh"
 fi
 
 # --- Is ETSAM installed already? ---------------------------------------------
@@ -96,7 +102,8 @@ latest_version() {
 
 # Version for "sort -V": a pre-release (1.2.0rc1) sorts before its release (1.2.0).
 sort_key() {
-    printf '%s\n' "$1" | sed 's/\([0-9]\)\(a\|b\|rc\)\([0-9]\)/\1~\2\3/'
+    # (sed -E: BSD sed on macOS has no \| in basic regular expressions)
+    printf '%s\n' "$1" | sed -E 's/([0-9])(a|b|rc)([0-9])/\1~\2\3/'
 }
 
 # Asks where to install a new ETSAM (on the terminal: stdin is the script itself when
@@ -177,7 +184,7 @@ fi
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-INSTALLER="$TMP_DIR/ETSAM-Linux-x86_64.sh"
+INSTALLER="$TMP_DIR/ETSAM-$PLATFORM.sh"
 
 if [ -f "$SOURCE" ]; then
     cp "$SOURCE" "$INSTALLER"

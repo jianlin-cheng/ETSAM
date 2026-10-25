@@ -1,19 +1,21 @@
 #!/bin/sh
-# ETSAM installer: post-install step (Linux).
+# ETSAM installer: post-install step (Linux and macOS).
 #
 # The installer ships ETSAM and its dependencies except PyTorch. Here PyTorch is
 # installed for the computer's accelerator; each case below installs it its own
-# way. NVIDIA and CPU use conda-forge; for NVIDIA GPUs, conda picks the CUDA build
-# that matches the installed driver, so no CUDA version needs to be chosen by
-# hand. Other accelerators may need PyTorch's own pip packages instead.
+# way. All use conda-forge; for NVIDIA GPUs, conda picks the CUDA build that
+# matches the installed driver, so no CUDA version needs to be chosen by hand.
+# On macOS (Apple silicon), conda-forge's PyTorch includes Metal (MPS) support.
+# Other accelerators may need PyTorch's own pip packages instead.
 #
-# Only NVIDIA GPUs are supported for now (pre_install.sh enforces this). Other
-# accelerators can be added as new cases below; they need testing on such
-# hardware, and contributions are welcome.
+# Linux supports NVIDIA GPUs and macOS Apple silicon (pre_install.sh enforces
+# this). Other accelerators can be added as new cases below; they need testing
+# on such hardware, and contributions are welcome.
 #
-# ETSAM_ACCELERATOR overrides the choice: "nvidia" (default) or "cpu" (used to
-# test the installer on machines without a GPU, e.g. in CI). Afterwards the model
-# weights are downloaded into the installation folder.
+# ETSAM_ACCELERATOR overrides the choice: "nvidia" (Linux default), "mps" (macOS
+# default) or "cpu" (used to test the installer on Linux machines without a GPU,
+# e.g. in CI). Afterwards the model weights are downloaded into the installation
+# folder.
 set -e
 
 # PyTorch version ETSAM is validated with. Pinned so every installation gets
@@ -21,13 +23,23 @@ set -e
 # fits the installed libraries). Bump it together with a validation run.
 PYTORCH_VERSION="2.7.1"
 CONDA="$PREFIX/bin/conda"
-ACCELERATOR="${ETSAM_ACCELERATOR:-nvidia}"
+if [ "$(uname -s)" = "Darwin" ]; then
+    ACCELERATOR="${ETSAM_ACCELERATOR:-mps}"
+else
+    ACCELERATOR="${ETSAM_ACCELERATOR:-nvidia}"
+fi
 
 case "$ACCELERATOR" in
     nvidia)
         echo "ETSAM: installing PyTorch with CUDA support (downloads about 2-3 GB)..."
         "$CONDA" install --yes --quiet --prefix "$PREFIX" --override-channels -c conda-forge \
             "pytorch-gpu=$PYTORCH_VERSION"
+        ;;
+    mps)
+        # macOS has one PyTorch build; it runs on the CPU and the Apple GPU.
+        echo "ETSAM: installing PyTorch with Apple silicon GPU (MPS) support (downloads a few hundred MB)..."
+        "$CONDA" install --yes --quiet --prefix "$PREFIX" --override-channels -c conda-forge \
+            "pytorch=$PYTORCH_VERSION"
         ;;
     cpu)
         echo "ETSAM: installing the CPU-only PyTorch build..."
@@ -39,9 +51,8 @@ case "$ACCELERATOR" in
     # pip packages into the environment, e.g. "$PREFIX/bin/python" -m pip install ...:
     #   rocm)  AMD GPUs: ROCm build of PyTorch
     #   xpu)   Intel GPUs: XPU build of PyTorch
-    #   mps)   Apple silicon (macOS installer): default PyTorch build
     *)
-        echo "ETSAM: unknown ETSAM_ACCELERATOR '$ACCELERATOR' (use nvidia or cpu)."
+        echo "ETSAM: unknown ETSAM_ACCELERATOR '$ACCELERATOR' (use nvidia, mps or cpu)."
         exit 1
         ;;
 esac
@@ -67,7 +78,11 @@ fi
 #   ~/.profile   login shells (sh, dash, bash) and most desktop sessions, so
 #                terminals opened from the desktop get it whatever the shell
 #   ~/.bashrc    new bash terminals
-#   ~/.zshrc     new zsh terminals (zsh does not read ~/.profile), if zsh is used
+#   ~/.zshrc     new zsh terminals (zsh does not read ~/.profile), if zsh is used;
+#                on macOS always (zsh is its default shell, and a new Mac has no
+#                ~/.zshrc yet)
+#   ~/.bash_profile   bash login shells on macOS (Terminal opens login shells,
+#                and bash then skips ~/.profile), if it exists
 #   ~/.config/fish/conf.d/etsam.fish   fish, if fish is used
 # Each gets one line, marked "added by the ETSAM installer", that adds the folder
 # only if it is not on the PATH yet; installing again replaces the line.
@@ -84,9 +99,14 @@ write_command etsam-postprocess "import sys, postprocess; sys.argv[0] = 'etsam-p
 
 if [ "${ETSAM_NO_PATH:-0}" != "1" ]; then
     MARK="added by the ETSAM installer"
-    for rc in "$HOME/.profile" "$HOME/.bashrc" "$HOME/.zshrc"; do
-        if [ "$rc" = "$HOME/.zshrc" ] && [ ! -f "$rc" ]; then
+    DARWIN=0
+    [ "$(uname -s)" = "Darwin" ] && DARWIN=1
+    for rc in "$HOME/.profile" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile"; do
+        if [ "$rc" = "$HOME/.zshrc" ] && [ ! -f "$rc" ] && [ "$DARWIN" = 0 ]; then
             continue  # zsh is not used
+        fi
+        if [ "$rc" = "$HOME/.bash_profile" ] && { [ ! -f "$rc" ] || [ "$DARWIN" = 0 ]; }; then
+            continue  # bash reads ~/.profile instead
         fi
         if [ -f "$rc" ]; then
             # Remove the line of an earlier installation (perhaps in another folder).

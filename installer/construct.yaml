@@ -3,7 +3,8 @@
 #
 # The installer contains ETSAM and its dependencies except PyTorch; the
 # post-install script adds the PyTorch build for the GPU. Currently NVIDIA GPUs
-# on Linux and Windows (x86-64) are supported.
+# on Linux and Windows (x86-64), and Apple silicon Macs (arm64, through Metal)
+# are supported.
 name: ETSAM
 version: {{ environ.get("ETSAM_VERSION", "1.1.0") }}
 company: ETSAM
@@ -21,10 +22,13 @@ specs:
 # The file names carry the version (ETSAM-1.2.3-Linux-x86_64.sh), also on the GitHub release.
 installer_filename: ETSAM-{{ environ.get("ETSAM_VERSION", "1.1.0") }}-Linux-x86_64.sh      # [linux64]
 installer_filename: ETSAM-{{ environ.get("ETSAM_VERSION", "1.1.0") }}-Windows-x86_64.exe   # [win64]
-installer_type: sh     # [linux]
+installer_filename: ETSAM-{{ environ.get("ETSAM_VERSION", "1.1.0") }}-macOS-arm64.sh       # [osx and arm64]
+# macOS: a shell installer as on Linux (rather than a .pkg), so that install.sh
+# and the plugins install, upgrade and reinstall it the same way.
+installer_type: sh     # [unix]
 installer_type: exe    # [win]
 
-default_prefix: ${HOME}/etsam_env              # [linux]
+default_prefix: ${HOME}/etsam_env              # [unix]
 default_prefix: '%USERPROFILE%\etsam_env'      # [win]
 
 pre_install: pre_install.sh     # [unix]

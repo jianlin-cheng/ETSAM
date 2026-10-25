@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Build the ETSAM installer for the current platform (Linux: .sh, Windows: .exe).
+# Build the ETSAM installer for the current platform (Linux and macOS: .sh,
+# Windows: .exe).
 # Needs rattler-build and constructor on PATH, e.g.:
 #   conda create -n etsam-build -c conda-forge rattler-build constructor
 #   conda activate etsam-build && installer/build.sh
-# Output: installer/build/installer/ETSAM-<version>-<OS>-x86_64.{sh,exe}
+# Output: installer/build/installer/ETSAM-<version>-<OS>-<arch>.{sh,exe}
+# (Linux-x86_64, Windows-x86_64, macOS-arm64)
 set -euo pipefail
 cd "$(dirname "$0")"
 
