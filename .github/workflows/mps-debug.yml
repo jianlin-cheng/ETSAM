@@ -9,6 +9,7 @@ on:
       - .github/workflows/mps-debug.yml
       - tests/e2e/compare_devices.py
       - tests/e2e/check_segmentation.py
+      - tests/e2e/replay_ops.py
       - sam2/**
       - inference.py
       - etsam.py
@@ -18,7 +19,6 @@ permissions:
 
 jobs:
   compare:
-    if: false  # done: MaxPool2d on MPS (see hieradet.do_pool)
     runs-on: macos-15
     timeout-minutes: 60
     defaults:
@@ -45,13 +45,14 @@ jobs:
           path: ~/.cache/etsam
           key: etsam-weights-db2dc46d775a17619e0a657aabaf0636-170488377f1424be1c431bc7983c21b4
 
-      - name: Compare MPS with the CPU
+      - name: Replay each operation on MPS
         run: |
           python tests/fetch_test_tomogram.py "$RUNNER_TEMP/tomogram.mrc"
-          python tests/e2e/compare_devices.py "$RUNNER_TEMP/tomogram.mrc" --device mps --slices 3 --show 60 2>&1 \
+          python tests/e2e/replay_ops.py "$RUNNER_TEMP/tomogram.mrc" --device mps --slices 3 --show 60 2>&1 \
             | grep -v "propagate in video"
 
   windows-conda:
+    if: false  # done: Miniforge 26.9.4-0 fails on Windows; pinned 26.7.2-0
     name: Windows setup-miniconda (${{ matrix.name }})
     runs-on: windows-latest
     timeout-minutes: 20
