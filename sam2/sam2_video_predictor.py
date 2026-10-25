@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from sam2.modeling.sam2_base import NO_OBJ_SCORE, SAM2Base
+from sam2.modeling.sam2_utils import to_device
 from sam2.utils.misc import concat_points, fill_holes_in_mask_scores, load_video_frames
 
 
@@ -261,7 +262,7 @@ class SAM2VideoPredictor(SAM2Base):
 
         if prev_out is not None and prev_out["pred_masks"] is not None:
             device = inference_state["device"]
-            prev_sam_mask_logits = prev_out["pred_masks"].to(device, non_blocking=True)
+            prev_sam_mask_logits = to_device(prev_out["pred_masks"], device)
             # Clamp the scale of prev_sam_mask_logits to avoid rare numerical issues.
             prev_sam_mask_logits = torch.clamp(prev_sam_mask_logits, -32.0, 32.0)
         current_out, _ = self._run_single_frame_inference(
@@ -392,7 +393,7 @@ class SAM2VideoPredictor(SAM2Base):
         device = inference_state["device"]
         video_H = inference_state["video_height"]
         video_W = inference_state["video_width"]
-        any_res_masks = any_res_masks.to(device, non_blocking=True)
+        any_res_masks = to_device(any_res_masks, device)
         if any_res_masks.shape[-2:] == (video_H, video_W):
             video_res_masks = any_res_masks
         else:
@@ -596,7 +597,7 @@ class SAM2VideoPredictor(SAM2Base):
                     storage_key = "cond_frame_outputs"
                     current_out = obj_output_dict[storage_key][frame_idx]
                     device = inference_state["device"]
-                    pred_masks = current_out["pred_masks"].to(device, non_blocking=True)
+                    pred_masks = to_device(current_out["pred_masks"], device)
                     if self.clear_non_cond_mem_around_input:
                         # clear non-conditioning memory of the surrounding frames
                         self._clear_obj_non_cond_mem_around_input(
@@ -783,14 +784,14 @@ class SAM2VideoPredictor(SAM2Base):
         maskmem_features = current_out["maskmem_features"]
         if maskmem_features is not None:
             maskmem_features = maskmem_features.to(torch.bfloat16)
-            maskmem_features = maskmem_features.to(storage_device, non_blocking=True)
+            maskmem_features = to_device(maskmem_features, storage_device)
         pred_masks_gpu = current_out["pred_masks"]
         # potentially fill holes in the predicted masks
         if self.fill_hole_area > 0:
             pred_masks_gpu = fill_holes_in_mask_scores(
                 pred_masks_gpu, self.fill_hole_area
             )
-        pred_masks = pred_masks_gpu.to(storage_device, non_blocking=True)
+        pred_masks = to_device(pred_masks_gpu, storage_device)
         # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
         maskmem_pos_enc = self._get_maskmem_pos_enc(inference_state, current_out)
         # object pointer is a small tensor, so we always keep it on GPU memory for fast access
@@ -835,7 +836,7 @@ class SAM2VideoPredictor(SAM2Base):
         # optionally offload the output to CPU memory to save GPU space
         storage_device = inference_state["storage_device"]
         maskmem_features = maskmem_features.to(torch.bfloat16)
-        maskmem_features = maskmem_features.to(storage_device, non_blocking=True)
+        maskmem_features = to_device(maskmem_features, storage_device)
         # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
         maskmem_pos_enc = self._get_maskmem_pos_enc(
             inference_state, {"maskmem_pos_enc": maskmem_pos_enc}

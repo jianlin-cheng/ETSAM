@@ -61,6 +61,17 @@ def select_closest_cond_frames(frame_idx, cond_frame_outputs, max_cond_frame_num
     return selected_outputs, unselected_outputs
 
 
+def to_device(tensor, device):
+    """
+    tensor.to(device), asynchronously except on Apple silicon GPUs: on MPS, an
+    asynchronous copy to the CPU can be read before it has completed, so the
+    tracking memory offloaded to the CPU would be partly stale.
+    """
+    device = torch.device(device)
+    non_blocking = "mps" not in (tensor.device.type, device.type)
+    return tensor.to(device, non_blocking=non_blocking)
+
+
 def get_1d_sine_pe(pos_inds, dim, temperature=10000):
     """
     Get 1D sine positional embedding as in the original Transformer paper.
