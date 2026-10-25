@@ -14,6 +14,10 @@ from contextlib import contextmanager
 from functools import lru_cache
 from importlib.resources import files
 
+# Run the few operations that PyTorch's Apple silicon (MPS) backend lacks on the
+# CPU instead of failing. PyTorch reads this when it is imported.
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
 import mrcfile
 import numpy as np
 import torch
@@ -41,6 +45,21 @@ CHECKPOINT_MD5 = {
 # parallel parts (measured: 1 connection 0.45 MB/s, 16 3.8 MB/s, 32 6.9 MB/s,
 # 64 13.3 MB/s).
 DOWNLOAD_CONNECTIONS = int(os.environ.get("ETSAM_DOWNLOAD_CONNECTIONS", "64"))
+
+
+def select_device():
+    """
+    The PyTorch device ETSAM runs on: "cuda" (NVIDIA GPU), "mps" (Apple silicon
+    GPU) or "cpu". ETSAM_DEVICE overrides the choice (e.g. ETSAM_DEVICE=cpu).
+    """
+    override = os.environ.get("ETSAM_DEVICE")
+    if override:
+        return override
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def min_max_normalize(array):
@@ -418,7 +437,7 @@ def segment_into(
     With mask_threshold, result is a uint8 array for the mask (logits > mask_threshold).
     """
     stage1_ckpt_path, stage2_ckpt_path = ensure_checkpoints(progress)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = select_device()
     grid_interval = 10 if split_processing else 50
     # A memory-mapped tomogram (from the CLI or a plugin) is read with file
     # reads, so that it does not accumulate in RAM as its slices are used.
@@ -673,8 +692,11 @@ def main():
         with mrcfile.mmap(input_tomogram_file_path, mode="r") as mrc:
             voxel_size = mrc.voxel_size.copy()
             input_tomogram_shape = mrc.data.shape
-            if not torch.cuda.is_available():
-                print("Warning: no CUDA GPU found, running on the CPU (very slow)")
+            device = select_device()
+            if device == "cpu":
+                print("Warning: no GPU found (NVIDIA CUDA or Apple silicon), running on the CPU (very slow)")
+            elif device == "mps":
+                print("Running on the Apple silicon GPU (MPS)")
             print(f"Input tomogram shape: {input_tomogram_shape}, voxel size: {voxel_size}")
 
             # The tomogram stays memory-mapped: its slices are read as needed.

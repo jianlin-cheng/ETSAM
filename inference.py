@@ -105,7 +105,7 @@ def vos_inference(
         offload_state_to_cpu=offload_state_to_cpu,
     )
     frames = inference_state["images"]
-    if inference_state["device"].type == "cuda" and isinstance(frames, TomogramFrameLoader):
+    if inference_state["device"].type in ("cuda", "mps") and isinstance(frames, TomogramFrameLoader):
         # Prepare the next frame on the CPU while the GPU tracks the current one.
         frames = inference_state["images"] = PrefetchFrameLoader(frames)
     try:
@@ -328,6 +328,8 @@ def _prompt_and_propagate(
         torch.cuda.empty_cache()
         if hasattr(torch.cuda, "ipc_collect"):
             torch.cuda.ipc_collect()
+    elif torch.backends.mps.is_available():
+        torch.mps.empty_cache()
 
     return per_obj_output_mask_full
 
