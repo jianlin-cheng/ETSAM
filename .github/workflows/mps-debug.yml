@@ -11,6 +11,7 @@ on:
       - tests/e2e/check_segmentation.py
       - tests/e2e/replay_ops.py
       - tests/e2e/run_autocast.py
+      - tests/fetch_test_tomogram.py
       - sam2/**
       - inference.py
       - etsam.py

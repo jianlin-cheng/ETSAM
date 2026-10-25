@@ -12,6 +12,8 @@ and mrcfile.
 """
 
 import argparse
+import http.client
+import os
 import time
 import urllib.request
 
@@ -37,7 +39,7 @@ def fetch(url, start, end, retries=5):
             if len(data) != end - start + 1:
                 raise OSError(f"incomplete download ({len(data)} of {end - start + 1} bytes)")
             return data
-        except OSError:
+        except (OSError, http.client.HTTPException):  # e.g. a dropped connection (IncompleteRead)
             if attempt == retries:
                 raise
             time.sleep(5 * (attempt + 1))
@@ -66,6 +68,7 @@ def main():
     print(f"{args.url}: {nx} x {ny} x {nz} (mode {mode}); slices {first}..{first + count - 1}")
     data = np.frombuffer(fetch(args.url, offset, offset + count * slice_bytes - 1), dtype=dtype)
 
+    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     with mrcfile.new(args.output, overwrite=True) as mrc:
         mrc.set_data(data.reshape(count, ny, nx).astype(np.float32))
         mrc.voxel_size = voxel_size
