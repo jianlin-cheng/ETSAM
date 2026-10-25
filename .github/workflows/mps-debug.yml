@@ -10,7 +10,7 @@ on:
       - tests/e2e/compare_devices.py
       - tests/e2e/check_segmentation.py
       - tests/e2e/replay_ops.py
-      - tests/e2e/run_blocking.py
+      - tests/e2e/run_autocast.py
       - sam2/**
       - inference.py
       - etsam.py
@@ -46,22 +46,25 @@ jobs:
           path: ~/.cache/etsam
           key: etsam-weights-db2dc46d775a17619e0a657aabaf0636-170488377f1424be1c431bc7983c21b4
 
-      # Is MPS deterministic, and do non-blocking copies to the CPU change the result?
-      - name: MPS twice, MPS with blocking copies, and the CPU
+      # MPS in float32 (twice: deterministic?) and with bfloat16 autocast, as on
+      # CUDA, on 16 slices; the logits are compared with CUDA's outside CI.
+      - name: MPS float32 twice, and bfloat16
         run: |
-          T="$RUNNER_TEMP"
-          python tests/fetch_test_tomogram.py "$T/tomogram.mrc"
-          for run in mps1 mps2; do python etsam.py "$T/tomogram.mrc" --output-dir "$T/$run" --store-logits > /dev/null 2>&1; done
-          python tests/e2e/run_blocking.py "$T/tomogram.mrc" --output-dir "$T/blocking" --store-logits > /dev/null 2>&1
-          ETSAM_DEVICE=cpu python etsam.py "$T/tomogram.mrc" --output-dir "$T/cpu" --store-logits > /dev/null 2>&1
-          L=tomogram_etsam_predicted_logits.mrc
-          for pair in "mps1 mps2" "mps1 cpu" "mps2 cpu" "blocking cpu"; do
-            set -- $pair
-            echo "===== $1 vs $2"
-            python tests/e2e/check_segmentation.py "$T/tomogram.mrc" --logits "$T/$1/$L" --reference "$T/$2/$L" \
-              | grep -E "correlation|Dice|no object" || true
-            python -c "import mrcfile, numpy as np, sys; a, b = (mrcfile.read(p) for p in sys.argv[1:]); print('identical:', np.array_equal(a, b), 'max abs difference:', float(np.abs(a - b).max()))" "$T/$1/$L" "$T/$2/$L"
+          T="$RUNNER_TEMP/out"
+          python tests/fetch_test_tomogram.py "$T/tomogram.mrc" --slices 16
+          for run in float32 float32_again; do
+            /usr/bin/time -p python etsam.py "$T/tomogram.mrc" --output-dir "$T/$run" --store-logits 2>&1 | grep -E "^real|Error|Running on"
           done
+          /usr/bin/time -p python tests/e2e/run_autocast.py bfloat16 "$T/tomogram.mrc" --output-dir "$T/bfloat16" --store-logits 2>&1 \
+            | grep -E "^real|Error|Running on|Traceback|rror"
+          python -c "import mrcfile, numpy as np, sys; a, b = (mrcfile.read(p) for p in sys.argv[1:]); print('float32 runs identical:', np.array_equal(a, b))" \
+            "$T/float32/tomogram_etsam_predicted_logits.mrc" "$T/float32_again/tomogram_etsam_predicted_logits.mrc"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mps-logits
+          path: ${{ runner.temp }}/out/*/*logits.mrc
+          retention-days: 3
 
   windows-conda:
     if: false  # done: Miniforge 26.9.4-0 fails on Windows; pinned 26.7.2-0
