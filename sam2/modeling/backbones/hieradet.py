@@ -27,6 +27,11 @@ def do_pool(x: torch.Tensor, pool: nn.Module, norm: nn.Module = None) -> torch.T
         return x
     # (B, H, W, C) -> (B, C, H, W)
     x = x.permute(0, 3, 1, 2)
+    if x.device.type == "mps":
+        # Max pooling on MPS gives wrong values for such non-contiguous views
+        # (e.g. the queries split from qkv); pooling is exact, so a contiguous
+        # copy gives the same result as on other devices.
+        x = x.contiguous()
     x = pool(x)
     # (B, C, H', W') -> (B, H', W', C)
     x = x.permute(0, 2, 3, 1)

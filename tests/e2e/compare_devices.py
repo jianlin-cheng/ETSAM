@@ -70,6 +70,13 @@ def check_ops(device):
     report("bfloat16 on device", x.bfloat16(), x.to(device).bfloat16())
     big = torch.randn(1000, generator=g)
     report("copy of a view with a storage offset", big[100:356], big[100:356].to(device))
+    # Hiera's query pooling: a non-contiguous view of the queries split from qkv
+    qkv = torch.randn(1024, 16, 3, 2, 112, generator=g)
+    view = qkv.unbind(2)[0].reshape(1024, 4, 4, -1).permute(0, 3, 1, 2)
+    pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+    report("max pooling of a non-contiguous view", pool(view), pool(qkv.to(device).unbind(2)[0]
+           .reshape(1024, 4, 4, -1).permute(0, 3, 1, 2)))
+    report("max pooling of a contiguous copy", pool(view), pool(view.to(device).contiguous()))
     q, k, v = (torch.randn(1, 8, 300, 64, generator=g) for _ in range(3))
     report("scaled dot-product attention",
            torch.nn.functional.scaled_dot_product_attention(q, k, v),
@@ -116,7 +123,7 @@ def main():
     check_ops(args.device)
 
     data = mrcfile.read(args.tomogram)
-    data = data[len(data) - args.slices:]
+    data = data[len(data) - args.slices:]  # the last slices, where ETSAM finds membranes
     volume = NormalizedTomogram(np.ascontiguousarray(data))
     ckpt, _ = etsam.ensure_checkpoints()
     cpu_records, cpu_output, cpu_state = trace("cpu", volume, ckpt)
